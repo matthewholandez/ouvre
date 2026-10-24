@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleIdentifier</key><string>com.ouvre.Integration.URLLogger</string>
+  <key>CFBundleName</key><string>URL Logger</string>
+  <key>CFBundleExecutable</key><string>URLLogger</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleShortVersionString</key><string>1.0</string>
+  <key>LSUIElement</key><true/>
+  <key>VerificationLogPath</key><string>/tmp/ouvre-fixture.log</string>
+  <key>CFBundleURLTypes</key><array><dict>
+    <key>CFBundleURLName</key><string>URL Logger</string>
+    <key>CFBundleURLSchemes</key><array><string>http</string><string>https</string></array>
+  </dict></array>
+  <key>CFBundleDocumentTypes</key><array><dict>
+    <key>CFBundleTypeName</key><string>HTML</string>
+    <key>CFBundleTypeExtensions</key><array><string>html</string><string>htm</string></array>
+    <key>CFBundleTypeRole</key><string>Viewer</string>
+  </dict></array>
+</dict></plist>

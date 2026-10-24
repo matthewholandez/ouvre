@@ -1,0 +1,15 @@
+name: Build and test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test routing core
+        run: swift test
+      - name: Build macOS app
+        run: xcodebuild -project Ouvre.xcodeproj -scheme Ouvre -configuration Release -destination 'generic/platform=macOS' CODE_SIGNING_ALLOWED=NO build

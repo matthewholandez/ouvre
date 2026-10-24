@@ -1,0 +1,41 @@
+// !$*UTF8*$!
+{
+ archiveVersion = 1;
+ classes = {};
+ objectVersion = 56;
+ objects = {
+  000000000000000000000001 = {isa = PBXProject; attributes = {LastUpgradeCheck = 1500;}; buildConfigurationList = 000000000000000000000031; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = 000000000000000000000002; productRefGroup = 000000000000000000000003; projectDirPath = ""; projectRoot = ""; targets = (000000000000000000000004); };
+  000000000000000000000002 = {isa = PBXGroup; children = (000000000000000000000005, 000000000000000000000006, 000000000000000000000003); sourceTree = "<group>"; };
+  000000000000000000000003 = {isa = PBXGroup; children = (000000000000000000000010); name = Products; sourceTree = "<group>"; };
+  000000000000000000000005 = {isa = PBXGroup; children = (000000000000000000000011, 000000000000000000000012, 000000000000000000000018, 000000000000000000000013, 000000000000000000000014, 000000000000000000000015, 000000000000000000000017, 000000000000000000000019); path = Sources; sourceTree = "<group>"; };
+  000000000000000000000019 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OuvreApp/VerificationHooks.swift; sourceTree = "<group>"; };
+  000000000000000000000018 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OuvreCore/ProfileMetadata.swift; sourceTree = "<group>"; };
+  000000000000000000000006 = {isa = PBXGroup; children = (000000000000000000000016); path = Resources; sourceTree = "<group>"; };
+  000000000000000000000011 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OuvreCore/Routing.swift; sourceTree = "<group>"; };
+  000000000000000000000012 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OuvreCore/ConfigurationStore.swift; sourceTree = "<group>"; };
+  000000000000000000000013 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OuvreApp/BrowserCatalog.swift; sourceTree = "<group>"; };
+  000000000000000000000014 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OuvreApp/AppModel.swift; sourceTree = "<group>"; };
+  000000000000000000000015 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OuvreApp/OuvreApp.swift; sourceTree = "<group>"; };
+  000000000000000000000017 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OuvreApp/Views.swift; sourceTree = "<group>"; };
+  000000000000000000000016 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+  000000000000000000000010 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Ouvre.app; sourceTree = BUILT_PRODUCTS_DIR; };
+  000000000000000000000004 = {isa = PBXNativeTarget; buildConfigurationList = 000000000000000000000032; buildPhases = (000000000000000000000020, 000000000000000000000021); buildRules = (); dependencies = (); name = Ouvre; productName = Ouvre; productReference = 000000000000000000000010; productType = "com.apple.product-type.application"; };
+  000000000000000000000020 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000041, 000000000000000000000042, 000000000000000000000048, 000000000000000000000043, 000000000000000000000044, 000000000000000000000045, 000000000000000000000047, 000000000000000000000049); runOnlyForDeploymentPostprocessing = 0; };
+  000000000000000000000049 = {isa = PBXBuildFile; fileRef = 000000000000000000000019; };
+  000000000000000000000048 = {isa = PBXBuildFile; fileRef = 000000000000000000000018; };
+  000000000000000000000021 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+  000000000000000000000041 = {isa = PBXBuildFile; fileRef = 000000000000000000000011; };
+  000000000000000000000042 = {isa = PBXBuildFile; fileRef = 000000000000000000000012; };
+  000000000000000000000043 = {isa = PBXBuildFile; fileRef = 000000000000000000000013; };
+  000000000000000000000044 = {isa = PBXBuildFile; fileRef = 000000000000000000000014; };
+  000000000000000000000045 = {isa = PBXBuildFile; fileRef = 000000000000000000000015; };
+  000000000000000000000047 = {isa = PBXBuildFile; fileRef = 000000000000000000000017; };
+  000000000000000000000031 = {isa = XCConfigurationList; buildConfigurations = (000000000000000000000051, 000000000000000000000052); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+  000000000000000000000032 = {isa = XCConfigurationList; buildConfigurations = (000000000000000000000053, 000000000000000000000054); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+  000000000000000000000051 = {isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; SDKROOT = macosx; SWIFT_VERSION = 5.9; MACOSX_DEPLOYMENT_TARGET = 14.0; }; name = Debug; };
+  000000000000000000000052 = {isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; SDKROOT = macosx; SWIFT_VERSION = 5.9; MACOSX_DEPLOYMENT_TARGET = 14.0; }; name = Release; };
+  000000000000000000000053 = {isa = XCBuildConfiguration; buildSettings = { PRODUCT_BUNDLE_IDENTIFIER = com.matthewholandez.Ouvre; PRODUCT_NAME = Ouvre; INFOPLIST_FILE = Resources/Info.plist; GENERATE_INFOPLIST_FILE = NO; CODE_SIGN_STYLE = Automatic; SWIFT_VERSION = 5.9; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; MACOSX_DEPLOYMENT_TARGET = 14.0; ENABLE_HARDENED_RUNTIME = YES; }; name = Debug; };
+  000000000000000000000054 = {isa = XCBuildConfiguration; buildSettings = { PRODUCT_BUNDLE_IDENTIFIER = com.matthewholandez.Ouvre; PRODUCT_NAME = Ouvre; INFOPLIST_FILE = Resources/Info.plist; GENERATE_INFOPLIST_FILE = NO; CODE_SIGN_STYLE = Automatic; SWIFT_VERSION = 5.9; MACOSX_DEPLOYMENT_TARGET = 14.0; ENABLE_HARDENED_RUNTIME = YES; }; name = Release; };
+ };
+ rootObject = 000000000000000000000001;
+}
