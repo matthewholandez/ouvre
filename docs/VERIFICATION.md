@@ -59,7 +59,7 @@ swiftc scripts/verification/URLLogger.swift -o "$fixture/Contents/MacOS/URLLogge
 cp scripts/verification/URLLoggerInfo.plist "$fixture/Contents/Info.plist"
 plutil -replace VerificationLogPath -string "$verify_root/fixture.log" "$fixture/Contents/Info.plist"
 codesign --force --deep --sign - "$fixture"
-swiftc -parse-as-library Sources/OuvreCore/*.swift Sources/OuvreApp/VerificationHooks.swift Sources/OuvreApp/BrowserCatalog.swift scripts/verification/LaunchFixture.swift -o "$verify_root/launch-fixture"
+swiftc -parse-as-library Sources/OuvreCore/*.swift Sources/OuvreApp/VerificationHooks.swift Sources/OuvreApp/ProfileAccessStore.swift Sources/OuvreApp/BrowserCatalog.swift scripts/verification/LaunchFixture.swift -o "$verify_root/launch-fixture"
 "$verify_root/launch-fixture" "$fixture" 'https://example.com/ouvre-e2e-generic?marker=generic-D#fragment-D'
 cat "$verify_root/fixture.log"
 ```
@@ -72,10 +72,16 @@ mkdir -p "$fake_app/Contents/MacOS"
 printf '#!/bin/sh\nexit 42\n' > "$fake_app/Contents/MacOS/FailBrowser"
 chmod +x "$fake_app/Contents/MacOS/FailBrowser"
 cp scripts/verification/FailingBrowserInfo.plist "$fake_app/Contents/Info.plist"
-swiftc -D DEBUG -parse-as-library Sources/OuvreCore/*.swift Sources/OuvreApp/VerificationHooks.swift Sources/OuvreApp/BrowserCatalog.swift scripts/verification/EarlyExit.swift -o "$verify_root/early-exit"
+swiftc -D DEBUG -parse-as-library Sources/OuvreCore/*.swift Sources/OuvreApp/VerificationHooks.swift Sources/OuvreApp/ProfileAccessStore.swift Sources/OuvreApp/BrowserCatalog.swift scripts/verification/EarlyExit.swift -o "$verify_root/early-exit"
 OUVRE_TEST_CONFIG="$verify_root/config.json" OUVRE_TEST_CHROME_ROOT="$verify_root/Chrome" OUVRE_TEST_TRACE="$verify_root/trace.log" "$verify_root/early-exit" "$fake_app"
 ```
 
 The harness prints `Caught early browser exit status 42` only if `BrowserLauncher.open` throws the expected error.
+
+## Profile discovery follow-up
+
+The isolated Chrome routing test above did not exercise macOS access to the user's normal Chrome `Local State`. A separately identified Debug Ouvre app, launched through LaunchServices in the graphical session, scanned the installed browsers. It discovered two Helium profiles. Its read of Chrome's `Local State` failed with `NSCocoaErrorDomain/257` (permission denied), although a terminal process could read the same file. The previous generic Chrome row therefore came from an unreported app-data access failure; the previous generic Helium row came from missing Helium profile support. The updated Browsers settings reports access failures and offers a per-browser folder chooser. Actual Chrome permission recovery still requires the user to choose the Chrome folder in that native panel.
+
+The read-only bookmark creation, resolution, and scan path was exercised inside a separately signed Ouvre GUI bundle against a disposable one-profile folder; it returned one profile. This checks the app-bundle API path, but a disposable folder does not simulate macOS consent for protected Chrome data. Installed Helium was also launched with a disposable `--user-data-dir` and `--profile-directory=Profile 1`; only the temporary `Profile 1/History` contained the exact marked URL, including its query and fragment. No normal browser profile was launched or modified. The temporary app and browser processes were stopped and their folders removed. HTTP and HTTPS handlers remained OpenIn.
 
 After testing, terminate only the processes whose command lines contain this exact temporary root, unregister the temporary app bundles with Launch Services if needed, and remove `$verify_root`. Do not terminate any normal Chrome, Safari, Helium, OpenIn, or Ouvre process.

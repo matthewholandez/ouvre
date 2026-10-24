@@ -6,6 +6,7 @@ enum VerificationHooks {
     static var configURL: URL? { path("OUVRE_TEST_CONFIG") }
     static var chromeRoot: URL? { path("OUVRE_TEST_CHROME_ROOT") }
     static var traceURL: URL? { path("OUVRE_TEST_TRACE") }
+    static var bookmarkTestRoot: URL? { path("OUVRE_TEST_BOOKMARK_ROOT") }
     static var commandURL: URL? { traceURL?.deletingLastPathComponent().appendingPathComponent("command.txt") }
     static var chromeArguments: [String] {
         guard isEnabled, let root = chromeRoot else { return [] }
@@ -21,6 +22,25 @@ enum VerificationHooks {
 
     static func record(_ event: String) {
         guard isEnabled, let file = traceURL else { return }
+        append(event, to: file)
+    }
+    static func recordScan(_ event: String) {
+        guard let file = traceURL else { return }
+        append(event, to: file)
+    }
+    static func runBookmarkSmokeTest() {
+        guard let root = bookmarkTestRoot, traceURL != nil else { return }
+        let bundleID = "com.example.ouvre.bookmark-smoke-test"
+        defer { UserDefaults.standard.removeObject(forKey: "profileFolderBookmark.\(bundleID)") }
+        do {
+            try ProfileAccessStore.saveSelection(root, for: bundleID, expectedRoot: root)
+            let count = try ProfileAccessStore.withRoot(bundleID: bundleID, defaultRoot: root) { selected in
+                ProfileMetadata.parse(try Data(contentsOf: selected.appendingPathComponent("Local State")), root: selected).count
+            }
+            recordScan("bookmark-test profiles=\(count)")
+        } catch { recordScan("bookmark-test error=\((error as NSError).domain)/\((error as NSError).code) \(error.localizedDescription)") }
+    }
+    private static func append(_ event: String, to file: URL) {
         let line = "\(Date().timeIntervalSince1970) \(event)\n"
         guard let data = line.data(using: .utf8) else { return }
         if !FileManager.default.fileExists(atPath: file.path) {
@@ -42,6 +62,8 @@ enum VerificationHooks {
     static var chromeArguments: [String] { [] }
     static var isEnabled: Bool { false }
     static func record(_ event: String) {}
+    static func recordScan(_ event: String) {}
+    static func runBookmarkSmokeTest() {}
     static func takeCommand() -> String? { nil }
     #endif
 }

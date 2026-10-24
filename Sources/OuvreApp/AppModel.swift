@@ -29,6 +29,7 @@ import SwiftUI
         }
         refreshBrowsers()
         refreshDefaultBrowserStatus()
+        VerificationHooks.runBookmarkSmokeTest()
     }
 
     var visibleDestinations: [Destination] {
@@ -38,6 +39,30 @@ import SwiftUI
     var allDestinations: [Destination] { browsers.flatMap(\.destinations) }
 
     func refreshBrowsers() { browsers = BrowserCatalog.discover() }
+
+    func chooseProfileFolder(for browser: Browser) {
+        guard let relativePath = BrowserSupport.profileDataPaths[browser.bundleID] else { return }
+        let expected = BrowserCatalog.profileRoot(relativePath: relativePath)
+        let panel = NSOpenPanel()
+        panel.title = "Allow Ouvre to read \(browser.name) profiles"
+        panel.message = "Choose the \(expected.lastPathComponent) folder. Ouvre reads profile names from Local State and does not change browser data."
+        panel.prompt = "Use Folder"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = false
+        panel.directoryURL = expected.deletingLastPathComponent()
+        panel.begin { [weak self] response in
+            guard response == .OK, let selected = panel.url else { return }
+            Task { @MainActor in
+                do {
+                    try ProfileAccessStore.saveSelection(selected, for: browser.bundleID, expectedRoot: expected)
+                    self?.refreshBrowsers()
+                    self?.message = nil
+                } catch { self?.message = error.localizedDescription }
+            }
+        }
+    }
 
     func save() {
         guard !configurationReadOnly else {

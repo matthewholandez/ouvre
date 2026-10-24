@@ -7,7 +7,9 @@
   000000000000000000000001 = {isa = PBXProject; attributes = {LastUpgradeCheck = 1500;}; buildConfigurationList = 000000000000000000000031; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = 000000000000000000000002; productRefGroup = 000000000000000000000003; projectDirPath = ""; projectRoot = ""; targets = (000000000000000000000004); };
   000000000000000000000002 = {isa = PBXGroup; children = (000000000000000000000005, 000000000000000000000006, 000000000000000000000003); sourceTree = "<group>"; };
   000000000000000000000003 = {isa = PBXGroup; children = (000000000000000000000010); name = Products; sourceTree = "<group>"; };
-  000000000000000000000005 = {isa = PBXGroup; children = (000000000000000000000011, 000000000000000000000012, 000000000000000000000018, 000000000000000000000013, 000000000000000000000014, 000000000000000000000015, 000000000000000000000017, 000000000000000000000019); path = Sources; sourceTree = "<group>"; };
+  000000000000000000000005 = {isa = PBXGroup; children = (000000000000000000000011, 000000000000000000000012, 000000000000000000000018, 00000000000000000000001A, 000000000000000000000013, 00000000000000000000001B, 000000000000000000000014, 000000000000000000000015, 000000000000000000000017, 000000000000000000000019); path = Sources; sourceTree = "<group>"; };
+  00000000000000000000001B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OuvreApp/ProfileAccessStore.swift; sourceTree = "<group>"; };
+  00000000000000000000001A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OuvreCore/BrowserSupport.swift; sourceTree = "<group>"; };
   000000000000000000000019 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OuvreApp/VerificationHooks.swift; sourceTree = "<group>"; };
   000000000000000000000018 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OuvreCore/ProfileMetadata.swift; sourceTree = "<group>"; };
   000000000000000000000006 = {isa = PBXGroup; children = (000000000000000000000016); path = Resources; sourceTree = "<group>"; };
@@ -20,7 +22,9 @@
   000000000000000000000016 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
   000000000000000000000010 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Ouvre.app; sourceTree = BUILT_PRODUCTS_DIR; };
   000000000000000000000004 = {isa = PBXNativeTarget; buildConfigurationList = 000000000000000000000032; buildPhases = (000000000000000000000020, 000000000000000000000021); buildRules = (); dependencies = (); name = Ouvre; productName = Ouvre; productReference = 000000000000000000000010; productType = "com.apple.product-type.application"; };
-  000000000000000000000020 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000041, 000000000000000000000042, 000000000000000000000048, 000000000000000000000043, 000000000000000000000044, 000000000000000000000045, 000000000000000000000047, 000000000000000000000049); runOnlyForDeploymentPostprocessing = 0; };
+  000000000000000000000020 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000041, 000000000000000000000042, 000000000000000000000048, 00000000000000000000004A, 000000000000000000000043, 00000000000000000000004B, 000000000000000000000044, 000000000000000000000045, 000000000000000000000047, 000000000000000000000049); runOnlyForDeploymentPostprocessing = 0; };
+  00000000000000000000004B = {isa = PBXBuildFile; fileRef = 00000000000000000000001B; };
+  00000000000000000000004A = {isa = PBXBuildFile; fileRef = 00000000000000000000001A; };
   000000000000000000000049 = {isa = PBXBuildFile; fileRef = 000000000000000000000019; };
   000000000000000000000048 = {isa = PBXBuildFile; fileRef = 000000000000000000000018; };
   000000000000000000000021 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };

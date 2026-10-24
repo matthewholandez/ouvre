@@ -6,6 +6,7 @@ struct Browser: Identifiable {
     let name: String
     let appURL: URL
     let profiles: [ProfileDescriptor]
+    var profileStatus: ProfileScanStatus = .unsupported
     var id: String { bundleID }
     var icon: NSImage { NSWorkspace.shared.icon(forFile: appURL.path) }
     var destinations: [Destination] {
@@ -14,20 +15,32 @@ struct Browser: Identifiable {
     }
 }
 
+enum ProfileScanStatus {
+    case unsupported
+    case ready
+    case accessRequired(String)
+    case unavailable(String)
+
+    var message: String? {
+        switch self {
+        case .unsupported, .ready: nil
+        case .accessRequired(let text), .unavailable(let text): text
+        }
+    }
+    var canChooseFolder: Bool {
+        if case .accessRequired = self { return true }
+        return false
+    }
+}
+
+struct ProfileScan {
+    let profiles: [ProfileDescriptor]
+    let status: ProfileScanStatus
+}
+
 enum BrowserCatalog {
-    // Chromium variants whose user-data folders and profile-directory command-line flag are compatible.
-    static let chromium: [String: String] = [
-        "com.google.Chrome": "Google/Chrome",
-        "com.microsoft.edgemac": "Microsoft Edge",
-        "com.brave.Browser": "BraveSoftware/Brave-Browser",
-        "org.chromium.Chromium": "Chromium"
-    ]
-    static let supportedBrowserIDs: Set<String> = [
-        "com.apple.Safari", "com.apple.SafariTechnologyPreview", "org.mozilla.firefox",
-        "com.google.Chrome", "com.google.Chrome.canary", "com.microsoft.edgemac",
-        "com.brave.Browser", "org.chromium.Chromium", "company.thebrowser.Browser",
-        "com.vivaldi.Vivaldi", "com.operasoftware.Opera", "com.kagi.kagimacOS"
-    ]
+    static let chromium = BrowserSupport.profileDataPaths
+    static let supportedBrowserIDs = BrowserSupport.knownBrowserIDs
 
     static func discover() -> [Browser] {
         let workspace = NSWorkspace.shared
@@ -49,8 +62,11 @@ enum BrowserCatalog {
             let name = (bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
                 ?? (bundle.object(forInfoDictionaryKey: "CFBundleName") as? String)
                 ?? appURL.deletingPathExtension().lastPathComponent
-            let profiles = chromium[id].map { discoverProfiles(relativePath: $0) } ?? []
-            found[id] = Browser(bundleID: id, name: name, appURL: appURL, profiles: profiles)
+            let scan = chromium[id].map { discoverProfiles(relativePath: $0, bundleID: id) }
+                ?? ProfileScan(profiles: [], status: .unsupported)
+            VerificationHooks.recordScan("catalog \(id) profiles=\(scan.profiles.count)")
+            found[id] = Browser(bundleID: id, name: name, appURL: appURL,
+                                profiles: scan.profiles, profileStatus: scan.status)
         }
         return found.values.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
@@ -75,11 +91,39 @@ enum BrowserCatalog {
             .appendingPathComponent(relativePath, isDirectory: true)
     }
 
-    static func discoverProfiles(relativePath: String) -> [ProfileDescriptor] {
+    static func discoverProfiles(relativePath: String, bundleID: String) -> ProfileScan {
         let root = profileRoot(relativePath: relativePath)
-        let localState = root.appendingPathComponent("Local State")
-        guard let data = try? Data(contentsOf: localState) else { return [] }
-        return ProfileMetadata.parse(data, root: root)
+        if !VerificationHooks.isEnabled, ProfileAccessStore.bookmarkNeedsRefresh(for: bundleID, expectedRoot: root) {
+            return ProfileScan(profiles: [], status: .accessRequired("Saved access to \(nameFor(bundleID)) profiles expired. Choose its profile folder again."))
+        }
+        return ProfileAccessStore.withRoot(bundleID: bundleID, defaultRoot: root) { selectedRoot in
+            let localState = selectedRoot.appendingPathComponent("Local State")
+            let data: Data
+            do { data = try Data(contentsOf: localState) }
+            catch {
+                let nsError = error as NSError
+                VerificationHooks.recordScan("scan \(relativePath) root=\(selectedRoot.path) error=\(nsError.domain)/\(nsError.code)")
+                let denied = (nsError.domain == NSCocoaErrorDomain && nsError.code == 257) ||
+                    (nsError.domain == NSPOSIXErrorDomain && [1, 13].contains(nsError.code))
+                let status: ProfileScanStatus = denied
+                    ? .accessRequired("macOS denied access to \(nameFor(bundleID)). Choose its profile folder to show profiles.")
+                    : .unavailable("Could not read \(nameFor(bundleID)) profile metadata: \(error.localizedDescription)")
+                return ProfileScan(profiles: [], status: status)
+            }
+            let profiles = ProfileMetadata.parse(data, root: selectedRoot)
+            VerificationHooks.recordScan("scan \(relativePath) root=\(selectedRoot.path) bytes=\(data.count) profiles=\(profiles.count)")
+            let status: ProfileScanStatus = profiles.isEmpty
+                ? .unavailable("No readable profiles were found in \(nameFor(bundleID)) metadata.") : .ready
+            return ProfileScan(profiles: profiles, status: status)
+        }
+    }
+
+    private static func nameFor(_ bundleID: String) -> String {
+        switch bundleID {
+        case "com.google.Chrome": "Chrome"
+        case "net.imput.helium": "Helium"
+        default: "the browser"
+        }
     }
 }
 
@@ -107,9 +151,11 @@ enum BrowserLauncher {
             guard let relativePath = BrowserCatalog.chromium[destination.bundleID],
                   ProfileMetadata.isSafeDirectory(directory) else { throw LaunchError.invalidProfile }
             guard browser.profiles.contains(where: { $0.directory == directory }) else { throw LaunchError.missingProfile }
-            let process = try startProfileProcess(url, directory: directory, browser: browser,
-                                                  root: BrowserCatalog.profileRoot(relativePath: relativePath),
-                                                  extraArguments: destination.bundleID == "com.google.Chrome" ? VerificationHooks.chromeArguments : [])
+            let process = try ProfileAccessStore.withRoot(bundleID: destination.bundleID,
+                                                          defaultRoot: BrowserCatalog.profileRoot(relativePath: relativePath)) { root in
+                try startProfileProcess(url, directory: directory, browser: browser, root: root,
+                                        extraArguments: destination.bundleID == "com.google.Chrome" ? VerificationHooks.chromeArguments : [])
+            }
             try await Task.sleep(nanoseconds: 250_000_000)
             if !process.isRunning, process.terminationStatus != 0 {
                 throw LaunchError.launchFailed(process.terminationStatus)

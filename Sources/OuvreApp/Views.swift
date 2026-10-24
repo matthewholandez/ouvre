@@ -151,24 +151,30 @@ struct SettingsView: View {
                 Spacer()
                 Button("Refresh") { model.refreshBrowsers() }
             }
-            Text("Chromium profiles appear when their Local State metadata is available. Safari and Firefox open as whole browsers.")
+            Text("Chrome, Helium and other supported Chromium profiles appear when Ouvre can read their Local State metadata. Safari and Firefox open as whole browsers.")
                 .font(.caption).foregroundStyle(.secondary)
             List {
                 ForEach(model.browsers) { browser in
                     Section(browser.name) {
+                        if let status = browser.profileStatus.message {
+                            Text(status).font(.caption).foregroundStyle(.secondary)
+                        }
+                        if browser.profileStatus.canChooseFolder {
+                            Button("Choose profile folder…") { model.chooseProfileFolder(for: browser) }
+                        }
                         ForEach(browser.destinations) { destination in
-                            Toggle(destination.profileName ?? "Default browser", isOn: Binding(
+                            Toggle(destination.profileName ?? "Whole browser", isOn: Binding(
                                 get: { !model.configuration.hiddenDestinationIDs.contains(destination.id) },
                                 set: { isShown in
                                     if isShown { model.configuration.hiddenDestinationIDs.remove(destination.id) }
                                     else { model.configuration.hiddenDestinationIDs.insert(destination.id) }
                                     model.save()
-                                }))
+                                })).disabled(model.configurationReadOnly)
                         }
                     }
                 }
             }
-        }.padding(20).disabled(model.configurationReadOnly)
+        }.padding(20)
     }
 
     private var rulesView: some View {
