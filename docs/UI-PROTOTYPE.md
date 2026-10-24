@@ -19,12 +19,12 @@ Interaction checks send keyboard and mouse events to the harness's own windows a
 ## Verification and limits
 
 - Reviewed picker, General, Browsers, Rules, new/edit rule, empty, permission, busy, error, and read-only layouts, including dark mode and small settings windows.
-- Picker interaction checks cover arrows, search, Return, Escape, no matches, and launch-in-progress protection.
-- Settings interaction checks cover sidebar navigation, pause, profile visibility, rule enablement, and ordering.
+- Picker interaction checks cover arrows, search, mouse selection, long-list navigation, Return, Escape, no matches, and launch-in-progress protection.
+- Settings interaction checks cover sidebar navigation, pause, profile visibility, fallback selection, rule enablement, ordering, and deletion cancel/confirm.
 - Error-state checks ensure dismissing a link preserves unrelated settings failures, successful setup clears its own error, and link failures do not appear on General. Setup and profile-access errors have dedicated screen captures.
-- Rule editor interaction checks cover adding and editing rules, and disabled save buttons for invalid patterns.
+- Rule editor interaction checks cover adding and editing rules, disabled save buttons for invalid patterns, and Return submitting a valid rule exactly once while invalid Return keeps the sheet open.
 - Six core routing tests pass. Debug and Release builds succeed; the local Release app passes signature verification.
-- Menu pause labels now refresh when opening the menu; reopening Ouvre presents settings or the pending picker. These paths were reviewed in code.
+- Native menu Pause, Try the picker, Settings, and Refresh actions were exercised in an isolated running app through its actual NSMenu items. Pause title, icon tooltip, and header state update together; reopening Ouvre presents settings or the pending picker.
 - Global Clear/Tinted preference switching, VoiceOver narration, native default-browser confirmation, and real folder-consent flows were not automated in this UI review. Existing profile-routing verification is recorded separately in `VERIFICATION.md`.
 
 Build with `./scripts/build-app.sh`; the app is written to `dist/Ouvre.app`.

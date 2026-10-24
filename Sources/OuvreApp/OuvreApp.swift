@@ -47,7 +47,9 @@ import SwiftUI
         if VerificationHooks.isEnabled {
             verificationTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
                 Task { @MainActor in
-                    if VerificationHooks.takeCommand() == "dismiss" { self?.model.dismissPicker() }
+                    guard let self, let command = VerificationHooks.takeCommand() else { return }
+                    if command == "dismiss" { self.model.dismissPicker() }
+                    else { self.runMenuVerificationCommand(command) }
                 }
             }
         }
@@ -118,4 +120,27 @@ import SwiftUI
         if let menu = sender.menu { updateMenu(menu) }
     }
     @objc private func quit() { NSApp.terminate(nil) }
+
+    private func runMenuVerificationCommand(_ command: String) {
+        #if DEBUG
+        guard command.hasPrefix("menu-"), let menu = statusItem?.menu else { return }
+        menuWillOpen(menu)
+        let action: Selector?
+        switch command {
+        case "menu-toggle-pause": action = #selector(togglePaused(_:))
+        case "menu-picker": action = #selector(testPicker)
+        case "menu-settings": action = #selector(openSettings)
+        case "menu-refresh": action = #selector(refreshBrowsers)
+        case "menu-state": action = nil
+        default: return
+        }
+        if let action, let index = menu.items.firstIndex(where: { $0.action == action }) {
+            menu.performActionForItem(at: index)
+        }
+        menuWillOpen(menu)
+        let pauseTitle = menu.items.first(where: { $0.action == #selector(togglePaused(_:)) })?.title ?? "missing"
+        let pickerTitle = menu.items.first(where: { $0.action == #selector(testPicker) })?.title ?? "missing"
+        VerificationHooks.record("menu paused=\(model.isPaused) pause-title=\(pauseTitle) picker-title=\(pickerTitle) header=\(menuHeader.accessibilityLabel() ?? "") tooltip=\(statusItem?.button?.toolTip ?? "") settings-visible=\(model.settingsWindow?.isVisible == true) current-url=\(model.currentURL?.absoluteString ?? "none")")
+        #endif
+    }
 }

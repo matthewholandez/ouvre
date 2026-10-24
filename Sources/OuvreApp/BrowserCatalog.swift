@@ -86,6 +86,9 @@ enum BrowserCatalog {
         if relativePath == "Google/Chrome", VerificationHooks.isEnabled, let root = VerificationHooks.chromeRoot {
             return root
         }
+        if relativePath == "net.imput.helium", VerificationHooks.isEnabled, let root = VerificationHooks.heliumRoot {
+            return root
+        }
         return FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support", isDirectory: true)
             .appendingPathComponent(relativePath, isDirectory: true)
@@ -154,7 +157,8 @@ enum BrowserLauncher {
             let process = try ProfileAccessStore.withRoot(bundleID: destination.bundleID,
                                                           defaultRoot: BrowserCatalog.profileRoot(relativePath: relativePath)) { root in
                 try startProfileProcess(url, directory: directory, browser: browser, root: root,
-                                        extraArguments: destination.bundleID == "com.google.Chrome" ? VerificationHooks.chromeArguments : [])
+                                        extraArguments: destination.bundleID == "com.google.Chrome" ? VerificationHooks.chromeArguments :
+                                            destination.bundleID == "net.imput.helium" ? VerificationHooks.heliumArguments : [])
             }
             try await Task.sleep(nanoseconds: 250_000_000)
             if !process.isRunning, process.terminationStatus != 0 {

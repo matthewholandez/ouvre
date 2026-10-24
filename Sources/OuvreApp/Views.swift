@@ -496,6 +496,7 @@ struct RuleEditor: View {
     @State private var value = ""
     @State private var targetID = ""
     @State private var attempted = false
+    @State private var isSaving = false
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             VStack(alignment: .leading, spacing: 6) {
@@ -509,6 +510,7 @@ struct RuleEditor: View {
                 }.labelsHidden()
                 TextField("", text: $value, prompt: Text(verbatim: pattern == .urlPrefix ? "https://example.com/work/" : "example.com")).textFieldStyle(.roundedBorder)
                     .accessibilityLabel("Domain or URL pattern")
+                    .onSubmit { save() }
                 if !value.isEmpty || attempted, let error = Routing.validationError(pattern: pattern, value: value) {
                     Label(error, systemImage: "exclamationmark.circle").font(.system(size: 11)).foregroundStyle(.secondary)
                 } else {
@@ -531,7 +533,7 @@ struct RuleEditor: View {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button(existing == nil ? "Add rule" : "Save changes") { save() }
-                    .keyboardShortcut(.defaultAction).disabled(Routing.validationError(pattern: pattern, value: value) != nil || model.configurationReadOnly)
+                    .keyboardShortcut(.defaultAction).disabled(Routing.validationError(pattern: pattern, value: value) != nil || model.configurationReadOnly || isSaving)
             }
         }.padding(26).frame(width: 420).background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
@@ -543,7 +545,8 @@ struct RuleEditor: View {
     }
     private func save() {
         attempted = true
-        guard Routing.validationError(pattern: pattern, value: value) == nil, !model.configurationReadOnly else { return }
+        guard !isSaving, Routing.validationError(pattern: pattern, value: value) == nil, !model.configurationReadOnly else { return }
+        isSaving = true
         let chosen = model.allDestinations.first { $0.id == targetID }
         let previous: Destination? = {
             if case .destination(let destination) = existing?.action, destination.id == targetID { return destination }
@@ -585,7 +588,8 @@ struct RuleEditor: View {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func update(paused: Bool, isDefault: Bool, destinationCount: Int) {
-        if !isDefault { detail.stringValue = "Setup needed · Open Settings" }
+        if !isDefault && paused { detail.stringValue = "Setup needed · Routing paused" }
+        else if !isDefault { detail.stringValue = "Setup needed · Open Settings" }
         else if paused { detail.stringValue = "Paused · Picker for every link" }
         else { detail.stringValue = "Routing active · \(destinationCount) \(destinationCount == 1 ? "destination" : "destinations")" }
         setAccessibilityLabel("Ouvre. \(detail.stringValue)")

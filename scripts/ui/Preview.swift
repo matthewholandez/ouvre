@@ -33,6 +33,8 @@ import SwiftUI
                     try await interactionChecks()
                     try await settingsChecks()
                     try await editorChecks()
+                    try await fallbackAndDeleteChecks()
+                    try await editorKeyboardCheck()
                     let errors = fixture()
                     errors.configurationMessage = "Configuration failure"
                     errors.profileAccessMessage = "Profile failure"
@@ -63,8 +65,14 @@ import SwiftUI
 
     @MainActor static func interactionChecks() async throws {
         NSApp.appearance = NSAppearance(named: .aqua)
-        for scenario in ["arrows", "search", "escape", "busy", "no-match"] {
+        for scenario in ["arrows", "search", "mouse", "long-list", "escape", "busy", "no-match"] {
             let model = fixture()
+            if scenario == "long-list" {
+                model.browsers = (0..<16).map { index in
+                    Browser(bundleID: "fixture.browser.\(index)", name: "Browser \(index)",
+                            appURL: URL(fileURLWithPath: "/Applications/Safari.app"), profiles: [])
+                }
+            }
             if scenario == "busy" { model.isLaunching = true }
             let view = NSHostingView(rootView: PickerView(model: model))
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 470, height: 450), styleMask: [.titled], backing: .buffered, defer: false)
@@ -78,12 +86,25 @@ import SwiftUI
                 try await Task.sleep(nanoseconds: 100_000_000)
             }
             if scenario == "arrows" { sendKey(125, characters: "\u{F701}", to: window) }
+            if scenario == "long-list" {
+                for _ in 0..<12 { sendKey(125, characters: "\u{F701}", to: window) }
+            }
+            if scenario == "mouse" {
+                for type: NSEvent.EventType in [.leftMouseDown, .leftMouseUp] {
+                    window.sendEvent(NSEvent.mouseEvent(with: type, location: NSPoint(x: 160, y: 450 - 216),
+                        modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                        windowNumber: window.windowNumber, context: nil, eventNumber: 0,
+                        clickCount: 1, pressure: 1)!)
+                }
+            }
             if scenario == "escape" { sendKey(53, characters: "\u{1b}", to: window) }
-            else { sendKey(36, characters: "\r", to: window) }
+            else if scenario != "mouse" { sendKey(36, characters: "\r", to: window) }
             try await Task.sleep(nanoseconds: 100_000_000)
             switch scenario {
-            case "arrows", "search":
+            case "arrows", "search", "mouse":
                 precondition(model.previewLastChoice?.profileDirectory == "Profile 1", "Wrong keyboard-selected destination in \(scenario)")
+            case "long-list":
+                precondition(model.previewLastChoice?.bundleID == "fixture.browser.12", "Long picker list selected wrong destination")
             case "escape": precondition(model.currentURL == nil, "Escape did not dismiss")
             default: precondition(model.currentURL != nil && model.previewLastChoice == nil, "Unexpected launch in \(scenario)")
             }
@@ -163,6 +184,103 @@ import SwiftUI
             print("PASS editor: \(editing ? "edit" : "add") and invalid input")
             window.close()
         }
+    }
+
+    @MainActor static func fallbackAndDeleteChecks() async throws {
+        let model = fixture()
+        let view = NSHostingView(rootView: SettingsView(model: model))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 620),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = view
+        window.makeKeyAndOrderFront(nil)
+        try await Task.sleep(nanoseconds: 300_000_000)
+        func click(_ x: CGFloat, _ y: CGFloat) async throws {
+            for type: NSEvent.EventType in [.leftMouseDown, .leftMouseUp] {
+                window.sendEvent(NSEvent.mouseEvent(with: type, location: NSPoint(x: x, y: 620 - y),
+                    modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                    windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!)
+            }
+            try await Task.sleep(nanoseconds: 200_000_000)
+        }
+        try await click(300, 302)
+        sendKey(125, characters: "\u{F701}", to: window)
+        sendKey(36, characters: "\r", to: window)
+        try await Task.sleep(nanoseconds: 250_000_000)
+        precondition(model.configuration.fallback != nil, "Fallback picker did not select a destination")
+        print("PASS settings: fallback picker selected \(model.configuration.fallback!.id)")
+
+        try await click(90, 174)
+        try await click(752, 158)
+        let originalCount = model.configuration.rules.count
+        precondition(window.sheets.count == 1, "Delete confirmation did not appear")
+        func buttons(_ view: NSView) -> [NSButton] {
+            (view as? NSButton).map { [$0] } ?? view.subviews.flatMap { buttons($0) }
+        }
+        guard let cancel = buttons(window.sheets[0].contentView!).first(where: { $0.title == "Cancel" }) else {
+            fatalError("Delete confirmation cancel button missing")
+        }
+        cancel.performClick(nil)
+        try await Task.sleep(nanoseconds: 200_000_000)
+        precondition(model.configuration.rules.count == originalCount, "Cancelling deleted a rule")
+        try await click(752, 158)
+        precondition(window.sheets.count == 1, "Delete confirmation did not reopen")
+        guard let delete = buttons(window.sheets[0].contentView!).first(where: { $0.title == "Delete rule" }) else {
+            fatalError("Delete confirmation button missing")
+        }
+        delete.performClick(nil)
+        try await Task.sleep(nanoseconds: 200_000_000)
+        precondition(model.configuration.rules.count == originalCount - 1, "Delete confirmation did not remove rule")
+        print("PASS settings: destructive rule deletion requires confirmation")
+        window.close()
+    }
+
+    @MainActor static func editorKeyboardCheck() async throws {
+        let model = fixture()
+        let originalCount = model.configuration.rules.count
+        let view = NSHostingView(rootView: SettingsView(model: model))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 620),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = view
+        window.makeKeyAndOrderFront(nil)
+        try await Task.sleep(nanoseconds: 300_000_000)
+        for point in [NSPoint(x: 90, y: 620 - 174), NSPoint(x: 730, y: 620 - 48)] {
+            for type: NSEvent.EventType in [.leftMouseDown, .leftMouseUp] {
+                window.sendEvent(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+                    timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                    context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!)
+            }
+            try await Task.sleep(nanoseconds: 200_000_000)
+        }
+        guard let sheet = window.sheets.first, let sheetView = sheet.contentView else { fatalError("Rule editor sheet missing") }
+        func fields(_ view: NSView) -> [NSTextField] {
+            (view as? NSTextField).map { [$0] } ?? view.subviews.flatMap { fields($0) }
+        }
+        guard let field = fields(sheetView).first(where: { $0.isEditable }) else { fatalError("No rule value field") }
+        sheet.makeFirstResponder(field)
+        guard let editor = sheet.firstResponder as? NSTextView else { fatalError("No rule text editor") }
+        editor.insertText("not a domain", replacementRange: NSRange(location: NSNotFound, length: 0))
+        try await Task.sleep(nanoseconds: 100_000_000)
+        func pressReturn() {
+            let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: sheet.windowNumber,
+                context: nil, characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36)!
+            NSApp.sendEvent(event)
+        }
+        pressReturn()
+        try await Task.sleep(nanoseconds: 100_000_000)
+        precondition(model.configuration.rules.count == originalCount && !window.sheets.isEmpty,
+                     "Invalid Return should keep the editor open")
+        editor.selectAll(nil)
+        editor.insertText("example.org", replacementRange: NSRange(location: NSNotFound, length: 0))
+        try await Task.sleep(nanoseconds: 100_000_000)
+        pressReturn()
+        pressReturn()
+        try await Task.sleep(nanoseconds: 200_000_000)
+        precondition(model.configuration.rules.count == originalCount + 1, "Return failed to save exactly one valid rule")
+        print("PASS editor: invalid Return stays open; valid Return saves once")
+        window.close()
     }
 
     @MainActor static func captureAll(output: URL) async throws {

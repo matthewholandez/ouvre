@@ -5,11 +5,17 @@ enum VerificationHooks {
     #if DEBUG
     static var configURL: URL? { path("OUVRE_TEST_CONFIG") }
     static var chromeRoot: URL? { path("OUVRE_TEST_CHROME_ROOT") }
+    static var heliumRoot: URL? { path("OUVRE_TEST_HELIUM_ROOT") }
     static var traceURL: URL? { path("OUVRE_TEST_TRACE") }
     static var bookmarkTestRoot: URL? { path("OUVRE_TEST_BOOKMARK_ROOT") }
     static var commandURL: URL? { traceURL?.deletingLastPathComponent().appendingPathComponent("command.txt") }
     static var chromeArguments: [String] {
         guard isEnabled, let root = chromeRoot else { return [] }
+        return ["--user-data-dir=\(root.path)", "--remote-debugging-port=0",
+                "--no-first-run", "--no-default-browser-check"]
+    }
+    static var heliumArguments: [String] {
+        guard isEnabled, let root = heliumRoot else { return [] }
         return ["--user-data-dir=\(root.path)", "--remote-debugging-port=0",
                 "--no-first-run", "--no-default-browser-check"]
     }
@@ -59,7 +65,9 @@ enum VerificationHooks {
     #else
     static var configURL: URL? { nil }
     static var chromeRoot: URL? { nil }
+    static var heliumRoot: URL? { nil }
     static var chromeArguments: [String] { [] }
+    static var heliumArguments: [String] { [] }
     static var isEnabled: Bool { false }
     static func record(_ event: String) {}
     static func recordScan(_ event: String) {}
