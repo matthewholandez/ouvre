@@ -242,9 +242,18 @@ struct SettingsView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         if model.configurationReadOnly {
-                            Notice(title: "Settings are read-only", message: model.message ?? "Your saved settings could not be loaded. Repair the configuration file, then reopen Ouvre.")
-                        } else if let message = model.message {
-                            Notice(title: "Something needs attention", message: message)
+                            Notice(title: "Settings are read-only", message: model.configurationMessage ?? "Your saved settings could not be loaded. Repair the configuration file, then reopen Ouvre.")
+                        } else if let message = model.configurationMessage {
+                            Notice(title: "Couldn’t save settings", message: message)
+                        }
+                        if page == .general, let message = model.defaultBrowserMessage {
+                            Notice(title: "Default browser setup needs attention", message: message)
+                        }
+                        if page == .browsers, let message = model.profileAccessMessage {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Notice(title: "Couldn’t access browser profiles", message: message)
+                                Button("Dismiss") { model.profileAccessMessage = nil }
+                            }
                         }
                         switch page {
                         case .general: general

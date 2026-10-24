@@ -6,7 +6,11 @@ import SwiftUI
     @Published var configuration: Configuration
     @Published var browsers: [Browser] = []
     @Published var currentURL: URL?
+    // Link failures belong to the picker; settings operations have separate lifetimes.
     @Published var message: String?
+    @Published var configurationMessage: String?
+    @Published var profileAccessMessage: String?
+    @Published var defaultBrowserMessage: String?
     @Published var isPaused = false
     @Published var isDefaultBrowser = false
     @Published var isLaunching = false
@@ -28,7 +32,7 @@ import SwiftUI
         do { configuration = try store.load() }
         catch {
             configuration = Configuration()
-            message = error.localizedDescription
+            configurationMessage = error.localizedDescription
             configurationReadOnly = true
         }
         refreshBrowsers()
@@ -54,7 +58,7 @@ import SwiftUI
     }
 
     func chooseProfileFolder(for browser: Browser) {
-        guard !isPreview else { message = "Preview: the native folder chooser opens here."; return }
+        guard !isPreview else { profileAccessMessage = "Preview: the native folder chooser opens here."; return }
         guard let relativePath = BrowserSupport.profileDataPaths[browser.bundleID] else { return }
         let expected = BrowserCatalog.profileRoot(relativePath: relativePath)
         let panel = NSOpenPanel()
@@ -72,8 +76,10 @@ import SwiftUI
                 do {
                     try ProfileAccessStore.saveSelection(selected, for: browser.bundleID, expectedRoot: expected)
                     self?.refreshBrowsers()
-                    self?.message = nil
-                } catch { self?.message = error.localizedDescription }
+                    self?.profileAccessMessage = nil
+                } catch {
+                    self?.profileAccessMessage = "Could not access \(browser.name) profiles in \(expected.path). \(Self.errorDetails(error)) Choose the profile folder again."
+                }
             }
         }
     }
@@ -81,11 +87,11 @@ import SwiftUI
     func save() {
         guard !isPreview else { return }
         guard !configurationReadOnly else {
-            message = "Configuration could not be loaded. Fix or move the config file before changing settings."
+            configurationMessage = "Configuration could not be loaded. Fix or move the config file before changing settings."
             return
         }
-        do { try store.save(configuration); message = nil }
-        catch { message = error.localizedDescription }
+        do { try store.save(configuration); configurationMessage = nil }
+        catch { configurationMessage = error.localizedDescription }
     }
 
     func receive(_ url: URL) {
@@ -197,25 +203,44 @@ import SwiftUI
         enqueue(URL(string: "https://example.com/ouvre-test?sample=1#preview")!, forcePicker: true)
     }
 
+    private func isCurrentDefault(for scheme: String) -> Bool {
+        guard let expected = Bundle.main.bundleIdentifier else { return false }
+        let app = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "\(scheme)://example.com")!)
+        return app.flatMap { Bundle(url: $0)?.bundleIdentifier } == expected
+    }
+
     func refreshDefaultBrowserStatus() {
         guard !isPreview else { return }
-        let expected = Bundle.main.bundleIdentifier
-        isDefaultBrowser = ["http", "https"].allSatisfy { scheme in
-            let app = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "\(scheme)://example.com")!)
-            return app.flatMap { Bundle(url: $0)?.bundleIdentifier } == expected
-        }
+        isDefaultBrowser = ["http", "https"].allSatisfy { isCurrentDefault(for: $0) }
+        if isDefaultBrowser { defaultBrowserMessage = nil }
+    }
+
+    static func errorDetails(_ error: Error) -> String {
+        let nsError = error as NSError
+        return "\(error.localizedDescription) (\(nsError.domain), code \(nsError.code))."
     }
 
     func makeDefaultBrowser() {
-        if isPreview { isDefaultBrowser = true; return }
+        if isPreview { isDefaultBrowser = true; defaultBrowserMessage = nil; return }
         guard Bundle.main.bundleIdentifier != nil else { return }
+        defaultBrowserMessage = nil
         NSWorkspace.shared.setDefaultApplication(at: Bundle.main.bundleURL, toOpenURLsWithScheme: "http") { [weak self] error in
             Task { @MainActor in
-                if let error { self?.message = error.localizedDescription; return }
+                guard let self else { return }
+                self.refreshDefaultBrowserStatus()
+                // Launch Services may report an error even after the association changed.
+                if let error, !self.isCurrentDefault(for: "http") {
+                    self.defaultBrowserMessage = "macOS could not make Ouvre the handler for HTTP links. \(Self.errorDetails(error)) Try Set up again, or choose Ouvre in System Settings → Desktop & Dock → Default web browser."
+                    return
+                }
                 NSWorkspace.shared.setDefaultApplication(at: Bundle.main.bundleURL, toOpenURLsWithScheme: "https") { [weak self] error in
                     Task { @MainActor in
-                        if let error { self?.message = error.localizedDescription }
-                        self?.refreshDefaultBrowserStatus()
+                        guard let self else { return }
+                        self.refreshDefaultBrowserStatus()
+                        if !self.isDefaultBrowser {
+                            let detail = error.map(Self.errorDetails) ?? "The default browser association has not changed."
+                            self.defaultBrowserMessage = "Ouvre is not yet the handler for both HTTP and HTTPS links. \(detail) Try Set up again, or choose Ouvre in System Settings → Desktop & Dock → Default web browser."
+                        }
                     }
                 }
             }

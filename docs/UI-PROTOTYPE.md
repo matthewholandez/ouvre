@@ -12,7 +12,7 @@ References: [Apple's custom Liquid Glass guidance](https://developer.apple.com/d
 
 Run `./scripts/ui/capture.sh` with Xcode installed. The standalone harness compiles the actual views with synthetic browsers and rules, then writes PNGs to `.build/ui-review`. It does not read or write user configuration, launch browsers, change the default browser, or use system-wide Accessibility automation. It temporarily brings its own windows forward.
 
-The matrix covers 14 screen/state combinations in light, dark, reduced-transparency, and increased-contrast modes (56 images), including 700 × 500 settings layouts. Accessibility overrides are injected only by the harness. Captures use AppKit view rendering; the window compositor's live glass effect is not faithfully represented in these PNGs.
+The matrix covers 17 screen/state combinations in light, dark, reduced-transparency, and increased-contrast modes (68 images), including 700 × 500 settings layouts. Accessibility overrides are injected only by the harness. Captures use AppKit view rendering; the window compositor's live glass effect is not faithfully represented in these PNGs.
 
 Interaction checks send keyboard and mouse events to the harness's own windows and assert model outcomes. Run only those checks with `./scripts/ui/capture.sh .build/ui-review --interactions-only`.
 
@@ -21,6 +21,7 @@ Interaction checks send keyboard and mouse events to the harness's own windows a
 - Reviewed picker, General, Browsers, Rules, new/edit rule, empty, permission, busy, error, and read-only layouts, including dark mode and small settings windows.
 - Picker interaction checks cover arrows, search, Return, Escape, no matches, and launch-in-progress protection.
 - Settings interaction checks cover sidebar navigation, pause, profile visibility, rule enablement, and ordering.
+- Error-state checks ensure dismissing a link preserves unrelated settings failures, successful setup clears its own error, and link failures do not appear on General. Setup and profile-access errors have dedicated screen captures.
 - Rule editor interaction checks cover adding and editing rules, and disabled save buttons for invalid patterns.
 - Six core routing tests pass. Debug and Release builds succeed; the local Release app passes signature verification.
 - Menu pause labels now refresh when opening the menu; reopening Ouvre presents settings or the pending picker. These paths were reviewed in code.

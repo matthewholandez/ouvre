@@ -33,6 +33,17 @@ import SwiftUI
                     try await interactionChecks()
                     try await settingsChecks()
                     try await editorChecks()
+                    let errors = fixture()
+                    errors.configurationMessage = "Configuration failure"
+                    errors.profileAccessMessage = "Profile failure"
+                    errors.defaultBrowserMessage = "Setup failure"
+                    errors.message = "Link failure"
+                    errors.dismissPicker()
+                    precondition(errors.message == nil)
+                    precondition(errors.configurationMessage != nil && errors.profileAccessMessage != nil && errors.defaultBrowserMessage != nil)
+                    errors.makeDefaultBrowser()
+                    precondition(errors.defaultBrowserMessage == nil && errors.profileAccessMessage != nil)
+                    print("PASS errors: independent lifetimes and successful setup recovery")
                 }
                 catch { print("Snapshot failed: \(error)"); exit(1) }
                 app.terminate(nil)
@@ -158,7 +169,7 @@ import SwiftUI
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
         for mode in ["light", "dark", "reduced", "contrast"] {
             NSApp.appearance = NSAppearance(named: mode == "dark" ? .darkAqua : mode == "contrast" ? .accessibilityHighContrastAqua : .aqua)
-            for screen in ["general", "browsers", "rules", "rules-empty", "editor", "picker", "picker-empty", "picker-error", "picker-busy", "read-only", "small-general", "small-rules", "browsers-empty", "editor-new"] {
+            for screen in ["general", "browsers", "rules", "rules-empty", "editor", "picker", "picker-empty", "picker-error", "picker-busy", "read-only", "small-general", "small-rules", "browsers-empty", "editor-new", "general-link-error", "setup-error", "profile-error"] {
                 let model = fixture()
                 let size: NSSize
                 let content: AnyView
@@ -173,10 +184,13 @@ import SwiftUI
                     size = NSSize(width: 470, height: 450)
                     content = AnyView(PickerView(model: model))
                 default:
+                    if screen == "general-link-error" { model.message = "The file couldn’t be opened."; model.isDefaultBrowser = true }
+                    if screen == "setup-error" { model.defaultBrowserMessage = "macOS could not make Ouvre the handler for HTTP links. Try Set up again, or choose Ouvre in System Settings." }
+                    if screen == "profile-error" { model.profileAccessMessage = "Could not access Google Chrome profiles. Choose the profile folder again." }
                     if screen == "browsers-empty" { model.browsers = [] }
                     if screen == "rules-empty" { model.configuration.rules = [] }
-                    if screen == "read-only" { model.configurationReadOnly = true; model.message = "Your saved settings could not be loaded. Your configuration has been preserved." }
-                    let page: SettingsPage = screen.hasPrefix("browsers") ? .browsers : screen.contains("rules") ? .rules : .general
+                    if screen == "read-only" { model.configurationReadOnly = true; model.configurationMessage = "Your saved settings could not be loaded. Your configuration has been preserved." }
+                    let page: SettingsPage = (screen.hasPrefix("browsers") || screen == "profile-error") ? .browsers : screen.contains("rules") ? .rules : .general
                     size = screen.hasPrefix("small") ? NSSize(width: 700, height: 500) : NSSize(width: 800, height: 620)
                     content = AnyView(SettingsView(model: model, page: page))
                 }
