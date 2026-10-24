@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 @main struct OuvreApp: App {
@@ -10,6 +11,8 @@ import SwiftUI
     let model = AppModel()
     private var statusItem: NSStatusItem?
     private var verificationTimer: Timer?
+    private var pauseObservation: AnyCancellable?
+    private let menuHeader = StatusMenuHeader()
 
     override init() {
         super.init()
@@ -23,16 +26,24 @@ import SwiftUI
         item.button?.image = NSImage(systemSymbolName: "arrow.up.right.square", accessibilityDescription: "Ouvre")
         let menu = NSMenu()
         menu.delegate = self
-        menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
-        menu.addItem(withTitle: "Test picker…", action: #selector(testPicker), keyEquivalent: "")
-        menu.addItem(withTitle: "Refresh browsers", action: #selector(refreshBrowsers), keyEquivalent: "")
+        menu.autoenablesItems = false
+        let heading = NSMenuItem()
+        heading.view = menuHeader
+        menu.addItem(heading)
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Pause routing", action: #selector(togglePaused), keyEquivalent: "")
+        addMenuItem("Pause routing", symbol: "pause.circle", action: #selector(togglePaused(_:)), to: menu)
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit Ouvre", action: #selector(quit), keyEquivalent: "q")
-        for item in menu.items { item.target = self }
+        addMenuItem("Try the picker…", symbol: "cursorarrow.click", action: #selector(testPicker), to: menu)
+        addMenuItem("Refresh browsers", symbol: "arrow.clockwise", action: #selector(refreshBrowsers), to: menu)
+        menu.addItem(.separator())
+        addMenuItem("Settings…", symbol: "gearshape", action: #selector(openSettings), key: ",", to: menu)
+        addMenuItem("Quit Ouvre", symbol: "power", action: #selector(quit), key: "q", to: menu)
         self.statusItem = item
         item.menu = menu
+        pauseObservation = model.$isPaused.sink { [weak self] paused in
+            self?.updateStatusButton(paused: paused)
+        }
+        updateMenu(menu)
         if VerificationHooks.isEnabled {
             verificationTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
                 Task { @MainActor in
@@ -60,10 +71,36 @@ import SwiftUI
         model.receive(url)
     }
 
-    func menuWillOpen(_ menu: NSMenu) {
+    private func addMenuItem(_ title: String, symbol: String, action: Selector, key: String = "", to menu: NSMenu) {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
+        item.target = self
+        item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        item.image?.size = NSSize(width: 16, height: 16)
+        menu.addItem(item)
+    }
+
+    private func updateStatusButton(paused: Bool) {
+        let label = paused ? "Ouvre — routing paused" : "Ouvre"
+        statusItem?.button?.image = NSImage(systemSymbolName: paused ? "pause.circle" : "arrow.up.right.square", accessibilityDescription: label)
+        statusItem?.button?.toolTip = label
+    }
+
+    private func updateMenu(_ menu: NSMenu) {
+        menuHeader.update(paused: model.isPaused, isDefault: model.isDefaultBrowser, destinationCount: model.visibleDestinations.count)
         if let item = menu.items.first(where: { $0.action == #selector(togglePaused(_:)) }) {
             item.title = model.isPaused ? "Resume routing" : "Pause routing"
+            item.image = NSImage(systemSymbolName: model.isPaused ? "play.circle" : "pause.circle", accessibilityDescription: nil)
+            item.image?.size = NSSize(width: 16, height: 16)
         }
+        if let item = menu.items.first(where: { $0.action == #selector(testPicker) }) {
+            item.title = model.currentURL == nil ? "Try the picker…" : "Show pending link…"
+            item.toolTip = model.currentURL == nil ? "Preview the picker with an example.com link." : "Return to the link waiting for a browser."
+        }
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        model.refreshDefaultBrowserStatus()
+        updateMenu(menu)
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -72,11 +109,13 @@ import SwiftUI
     }
 
     @objc private func openSettings() { model.showSettings() }
-    @objc private func testPicker() { model.testPicker() }
+    @objc private func testPicker() {
+        if model.currentURL != nil { model.showPicker() } else { model.testPicker() }
+    }
     @objc private func refreshBrowsers() { model.refreshBrowsers() }
     @objc private func togglePaused(_ sender: NSMenuItem) {
         model.isPaused.toggle()
-        sender.title = model.isPaused ? "Resume routing" : "Pause routing"
+        if let menu = sender.menu { updateMenu(menu) }
     }
     @objc private func quit() { NSApp.terminate(nil) }
 }

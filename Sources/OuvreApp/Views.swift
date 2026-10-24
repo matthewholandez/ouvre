@@ -557,3 +557,37 @@ struct RuleEditor: View {
         model.save(); dismiss()
     }
 }
+
+/// A noninteractive summary inside the standard AppKit menu. Actions remain native menu items.
+@MainActor final class StatusMenuHeader: NSView {
+    private let title = NSTextField(labelWithString: "Ouvre")
+    private let detail = NSTextField(labelWithString: "")
+    private let icon = NSImageView()
+
+    init() {
+        super.init(frame: NSRect(x: 0, y: 0, width: 280, height: 62))
+        icon.frame = NSRect(x: 18, y: 20, width: 26, height: 26)
+        icon.image = NSImage(systemSymbolName: "arrow.up.right.square", accessibilityDescription: nil)
+        icon.contentTintColor = .labelColor
+        title.frame = NSRect(x: 56, y: 32, width: 210, height: 18)
+        title.font = .systemFont(ofSize: 13, weight: .semibold)
+        detail.frame = NSRect(x: 56, y: 13, width: 210, height: 16)
+        detail.font = .systemFont(ofSize: 11)
+        detail.textColor = .secondaryLabelColor
+        addSubview(icon)
+        addSubview(title)
+        addSubview(detail)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.staticText)
+        setAccessibilityChildren([])
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func update(paused: Bool, isDefault: Bool, destinationCount: Int) {
+        if !isDefault { detail.stringValue = "Setup needed · Open Settings" }
+        else if paused { detail.stringValue = "Paused · Picker for every link" }
+        else { detail.stringValue = "Routing active · \(destinationCount) \(destinationCount == 1 ? "destination" : "destinations")" }
+        setAccessibilityLabel("Ouvre. \(detail.stringValue)")
+    }
+}
