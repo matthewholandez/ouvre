@@ -12,15 +12,19 @@ import SwiftUI
     @Published var isLaunching = false
     @Published var configurationReadOnly = false
 
+    private(set) var previewLastChoice: Destination?
+    let isPreview: Bool
     private let store: ConfigurationStore
     private var pendingURLs: [(url: URL, forcePicker: Bool)] = []
     private var currentToken = UUID()
     var pickerWindow: NSWindow?
     var settingsWindow: NSWindow?
 
-    init() {
+    init(preview: Bool = false) {
+        isPreview = preview
         store = (VerificationHooks.isEnabled ? VerificationHooks.configURL : nil)
             .map(ConfigurationStore.init(fileURL:)) ?? ConfigurationStore.applicationStore()
+        if preview { configuration = Configuration(); return }
         do { configuration = try store.load() }
         catch {
             configuration = Configuration()
@@ -38,9 +42,19 @@ import SwiftUI
 
     var allDestinations: [Destination] { browsers.flatMap(\.destinations) }
 
-    func refreshBrowsers() { browsers = BrowserCatalog.discover() }
+    func refreshBrowsers() {
+        guard !isPreview else { return }
+        browsers = BrowserCatalog.discover()
+    }
+
+    func copyCurrentURL() {
+        guard !isPreview, let url = currentURL else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(url.absoluteString, forType: .string)
+    }
 
     func chooseProfileFolder(for browser: Browser) {
+        guard !isPreview else { message = "Preview: the native folder chooser opens here."; return }
         guard let relativePath = BrowserSupport.profileDataPaths[browser.bundleID] else { return }
         let expected = BrowserCatalog.profileRoot(relativePath: relativePath)
         let panel = NSOpenPanel()
@@ -65,6 +79,7 @@ import SwiftUI
     }
 
     func save() {
+        guard !isPreview else { return }
         guard !configurationReadOnly else {
             message = "Configuration could not be loaded. Fix or move the config file before changing settings."
             return
@@ -92,6 +107,7 @@ import SwiftUI
         currentURL = url
         currentToken = UUID()
         refreshBrowsers()
+        if isPreview { showPicker(); return }
         if !isPaused, !request.forcePicker, case .destination(let destination) = Routing.decision(for: url, configuration: configuration) {
             VerificationHooks.record("route \(destination.id) \(url.absoluteString)")
             isLaunching = true
@@ -114,6 +130,7 @@ import SwiftUI
 
     func choose(_ destination: Destination) {
         guard let url = currentURL, !isLaunching else { return }
+        if isPreview { previewLastChoice = destination; dismissPicker(); return }
         isLaunching = true
         let token = currentToken
         Task {
@@ -146,9 +163,12 @@ import SwiftUI
     func showPicker() {
         guard currentURL != nil else { return }
         if pickerWindow == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 530, height: 440),
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 470, height: 450),
                                   styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
             window.title = "Open with Ouvre"
+            window.titleVisibility = .hidden
+            window.titlebarAppearsTransparent = true
+            window.isMovableByWindowBackground = true
             window.isReleasedWhenClosed = false
             window.center()
             window.contentView = NSHostingView(rootView: PickerView(model: self))
@@ -160,11 +180,11 @@ import SwiftUI
 
     func showSettings() {
         if settingsWindow == nil {
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 590),
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 620),
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
             window.title = "Ouvre Settings"
             window.isReleasedWhenClosed = false
-            window.minSize = NSSize(width: 680, height: 480)
+            window.minSize = NSSize(width: 700, height: 500)
             window.center()
             window.contentView = NSHostingView(rootView: SettingsView(model: self))
             settingsWindow = window
@@ -178,6 +198,7 @@ import SwiftUI
     }
 
     func refreshDefaultBrowserStatus() {
+        guard !isPreview else { return }
         let expected = Bundle.main.bundleIdentifier
         isDefaultBrowser = ["http", "https"].allSatisfy { scheme in
             let app = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "\(scheme)://example.com")!)
@@ -186,6 +207,7 @@ import SwiftUI
     }
 
     func makeDefaultBrowser() {
+        if isPreview { isDefaultBrowser = true; return }
         guard Bundle.main.bundleIdentifier != nil else { return }
         NSWorkspace.shared.setDefaultApplication(at: Bundle.main.bundleURL, toOpenURLsWithScheme: "http") { [weak self] error in
             Task { @MainActor in

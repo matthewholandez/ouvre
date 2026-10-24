@@ -6,7 +6,7 @@ import SwiftUI
     var body: some Scene { Settings { EmptyView() } }
 }
 
-@MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
+@MainActor final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let model = AppModel()
     private var statusItem: NSStatusItem?
     private var verificationTimer: Timer?
@@ -22,6 +22,7 @@ import SwiftUI
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = NSImage(systemSymbolName: "arrow.up.right.square", accessibilityDescription: "Ouvre")
         let menu = NSMenu()
+        menu.delegate = self
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         menu.addItem(withTitle: "Test picker…", action: #selector(testPicker), keyEquivalent: "")
         menu.addItem(withTitle: "Refresh browsers", action: #selector(refreshBrowsers), keyEquivalent: "")
@@ -57,6 +58,17 @@ import SwiftUI
         guard let string = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
               let url = URL(string: string) else { return }
         model.receive(url)
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        if let item = menu.items.first(where: { $0.action == #selector(togglePaused(_:)) }) {
+            item.title = model.isPaused ? "Resume routing" : "Pause routing"
+        }
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if model.currentURL != nil { model.showPicker() } else { model.showSettings() }
+        return true
     }
 
     @objc private func openSettings() { model.showSettings() }

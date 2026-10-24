@@ -1,78 +1,193 @@
 import AppKit
 import SwiftUI
 
+// The snapshot harness can exercise accessibility fallbacks without changing macOS settings.
+struct UIReviewAccessibility {
+    let reduceTransparency: Bool
+    let increaseContrast: Bool
+}
+private struct UIReviewAccessibilityKey: EnvironmentKey {
+    static let defaultValue: UIReviewAccessibility? = nil
+}
+extension EnvironmentValues {
+    var uiReviewAccessibility: UIReviewAccessibility? {
+        get { self[UIReviewAccessibilityKey.self] }
+        set { self[UIReviewAccessibilityKey.self] = newValue }
+    }
+}
+
+// Native glass inherits macOS appearance preferences. Never read private defaults
+// or imitate Liquid Glass with a fixed blur/tint.
+struct NavigationSurface: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.uiReviewAccessibility) private var review
+    func body(content: Content) -> some View {
+        if (review?.reduceTransparency ?? reduceTransparency) || (review?.increaseContrast ?? (contrast == .increased)) {
+            content.background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 14))
+        } else {
+            glass(content)
+        }
+    }
+    @ViewBuilder private func glass(_ content: Content) -> some View {
+        #if compiler(>=6.2)
+        if #available(macOS 26, *) {
+            content.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 14))
+        } else {
+            content.background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        }
+        #else
+        content.background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        #endif
+    }
+}
+
+struct BrowserIcon: View {
+    let browser: Browser?
+    var size: CGFloat = 28
+    var body: some View {
+        Group {
+            if let browser {
+                Image(nsImage: browser.icon).resizable()
+            } else {
+                Image(systemName: "globe").resizable().scaledToFit().padding(4)
+            }
+        }.frame(width: size, height: size).accessibilityHidden(true)
+    }
+}
+
+struct Notice: View {
+    let title: String
+    let message: String
+    var symbol = "exclamationmark.circle"
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: symbol).foregroundStyle(.secondary).padding(.top, 2)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.system(size: 12, weight: .semibold))
+                Text(message).font(.system(size: 12)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+            }
+            Spacer(minLength: 0)
+        }.padding(12).background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+struct EmptyState: View {
+    let symbol: String
+    let title: String
+    let detail: String
+    var body: some View {
+        VStack(spacing: 10) {
+            Image(systemName: symbol).font(.system(size: 26, weight: .light)).foregroundStyle(.secondary)
+            Text(title).font(.headline)
+            Text(detail).font(.system(size: 12)).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+        }.frame(maxWidth: .infinity).padding(28)
+    }
+}
+
 struct PickerView: View {
     @ObservedObject var model: AppModel
     @State private var query = ""
     @State private var selection = 0
     @FocusState private var searchFocused: Bool
-
+    @Environment(\.colorSchemeContrast) private var contrast
     private var destinations: [Destination] {
         model.visibleDestinations.filter { query.isEmpty || $0.displayName.localizedCaseInsensitiveContains(query) }
     }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Open link with…").font(.title2.bold())
-            Text(model.currentURL?.absoluteString ?? "")
-                .font(.caption).foregroundStyle(.secondary).lineLimit(2).textSelection(.enabled)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Open link").font(.system(size: 20, weight: .semibold))
+                    Text(model.currentURL?.host ?? "Choose a destination")
+                        .font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer()
+                Button { model.copyCurrentURL() } label: { Image(systemName: "doc.on.doc") }
+                    .buttonStyle(.borderless).help("Copy full link")
+                    .accessibilityLabel("Copy full link").disabled(model.currentURL == nil)
+                Button { model.dismissPicker() } label: { Image(systemName: "xmark") }
+                    .buttonStyle(.borderless).help("Dismiss link (Esc)")
+                    .accessibilityLabel("Dismiss link")
+            }.padding(.horizontal, 22).padding(.top, 20).padding(.bottom, 16)
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(Color(nsColor: .secondaryLabelColor))
+                TextField("Search browsers and profiles", text: $query).textFieldStyle(.plain)
+                    .focused($searchFocused)
+                    .onChange(of: query) { _, _ in selection = 0 }
+                    .onKeyPress(.downArrow) { moveSelection(1); return .handled }
+                    .onKeyPress(.upArrow) { moveSelection(-1); return .handled }
+                    .onKeyPress(.return) { chooseSelected(); return .handled }
+                if !query.isEmpty {
+                    Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }
+                        .buttonStyle(.plain).accessibilityLabel("Clear search")
+                }
+            }.padding(11).modifier(NavigationSurface()).padding(.horizontal, 16).padding(.bottom, 12)
             if let message = model.message {
-                Text(message).foregroundStyle(.red).font(.caption)
+                Notice(title: "Couldn’t open this link", message: message)
+                    .padding(.horizontal, 16).padding(.bottom, 8)
             }
-            TextField("Search browsers and profiles", text: $query)
-                .textFieldStyle(.roundedBorder)
-                .focused($searchFocused)
-                .onChange(of: query) { _, _ in selection = 0 }
-                .onKeyPress(.downArrow) { moveSelection(1); return .handled }
-                .onKeyPress(.upArrow) { moveSelection(-1); return .handled }
-                .onKeyPress(.return) { chooseSelected(); return .handled }
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 4) {
-                    ForEach(Array(destinations.enumerated()), id: \.element.id) { index, destination in
-                        Button { model.choose(destination) } label: {
-                            HStack(spacing: 10) {
-                                if let browser = model.browsers.first(where: { $0.bundleID == destination.bundleID }) {
-                                    Image(nsImage: browser.icon).resizable().frame(width: 28, height: 28)
-                                }
-                                VStack(alignment: .leading) {
-                                    Text(destination.browserName).fontWeight(.medium)
-                                    if let profile = destination.profileName {
-                                        Text(profile).font(.caption).foregroundStyle(.secondary)
-                                    }
-                                }
-                                Spacer()
-                                if index == selection { Image(systemName: "return").foregroundStyle(.secondary) }
-                            }
-                            .padding(8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(index == selection ? Color.accentColor.opacity(0.15) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+                    VStack(spacing: 3) {
+                        ForEach(Array(destinations.enumerated()), id: \.element.id) { index, destination in
+                            destinationRow(destination, index: index).id(destination.id)
                         }
-                        .buttonStyle(.plain)
-                        .disabled(model.isLaunching)
-                        .id(destination.id)
-                    }
-                }
-                }
-                .onChange(of: selection) { _, index in
+                        if destinations.isEmpty {
+                            EmptyState(symbol: "magnifyingglass", title: query.isEmpty ? "No destinations yet" : "No matches",
+                                       detail: query.isEmpty ? "Show a browser or profile in Settings to open this link." : "Try another browser or profile name.")
+                        }
+                    }.padding(.horizontal, 12).padding(.vertical, 4)
+                }.onChange(of: selection) { _, index in
                     guard destinations.indices.contains(index) else { return }
-                    proxy.scrollTo(destinations[index].id, anchor: .center)
+                    proxy.scrollTo(destinations[index].id)
                 }
             }
-            if destinations.isEmpty { Text("No matching destinations. Refresh browsers in Settings.").foregroundStyle(.secondary) }
-            HStack {
-                Text("↑↓ Select  ·  Return Open  ·  Esc Dismiss").font(.caption).foregroundStyle(.secondary)
+            Divider().padding(.top, 8)
+            HStack(spacing: 12) {
+                if model.isLaunching {
+                    ProgressView().controlSize(.small)
+                    Text("Opening…").font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text("↑↓ to select  ·  ↵ to open").font(.system(size: 11)).foregroundStyle(.secondary)
+                }
                 Spacer()
-                Button("Cancel") { model.dismissPicker() }
-            }
+                Button("Settings…") { model.showSettings() }.buttonStyle(.link).font(.system(size: 11))
+            }.padding(.horizontal, 20).padding(.vertical, 13)
         }
-        .padding(20)
-        .frame(minWidth: 490, minHeight: 400)
+        .frame(minWidth: 430, minHeight: 330)
+        .background(Color(nsColor: .windowBackgroundColor))
         .onAppear { searchFocused = true }
         .onChange(of: model.currentURL) { _, _ in query = ""; selection = 0; searchFocused = true }
+        .onChange(of: destinations.map(\.id)) { _, _ in selection = min(selection, max(0, destinations.count - 1)) }
         .onExitCommand { model.dismissPicker() }
+        .help(model.currentURL?.absoluteString ?? "Choose where to open your link")
     }
-
+    private func destinationRow(_ destination: Destination, index: Int) -> some View {
+        Button { model.choose(destination) } label: {
+            HStack(spacing: 12) {
+                BrowserIcon(browser: model.browsers.first { $0.bundleID == destination.bundleID }, size: 32)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(destination.profileName ?? destination.browserName).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                    Text(destination.profileName == nil ? "Browser default" : destination.browserName)
+                        .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer()
+                if index == selection {
+                    Image(systemName: "return").font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+            }.padding(.horizontal, 12).padding(.vertical, 10)
+                .contentShape(RoundedRectangle(cornerRadius: 10))
+                .background(index == selection ? Color.accentColor.opacity(contrast == .increased ? 0.25 : 0.12) : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(index == selection ? Color.accentColor.opacity(0.5) : .clear, lineWidth: 1))
+        }.buttonStyle(.plain).disabled(model.isLaunching)
+            .accessibilityLabel("Open in \(destination.displayName)")
+            .accessibilityAddTraits(index == selection ? [.isSelected] : [])
+    }
     private func moveSelection(_ offset: Int) {
         guard !destinations.isEmpty else { return }
         selection = max(0, min(destinations.count - 1, selection + offset))
@@ -83,153 +198,285 @@ struct PickerView: View {
     }
 }
 
+enum SettingsPage: String, CaseIterable, Identifiable {
+    case general = "General", browsers = "Browsers", rules = "Rules"
+    var id: Self { self }
+    var symbol: String {
+        switch self { case .general: "slider.horizontal.3"; case .browsers: "globe"; case .rules: "arrow.triangle.branch" }
+    }
+    var subtitle: String {
+        switch self {
+        case .general: "A home for every link."
+        case .browsers: "Choose what appears in your picker."
+        case .rules: "Send familiar links straight to the right place."
+        }
+    }
+}
+
 struct SettingsView: View {
     @ObservedObject var model: AppModel
-    @State private var tab = 0
+    @State var page: SettingsPage = .general
     @State private var editingRule: Rule?
     @State private var addingRule = false
-    @State private var testURL = "https://example.com/path"
-
+    @State private var testURL = ""
+    @State private var pendingDelete: Rule?
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("Settings", selection: $tab) {
-                Text("General").tag(0)
-                Text("Browsers").tag(1)
-                Text("Rules").tag(2)
-            }.pickerStyle(.segmented).padding()
+        HStack(spacing: 0) {
+            sidebar
             Divider()
-            Group {
-                switch tab {
-                case 0: general
-                case 1: browsersView
-                default: rulesView
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(page.rawValue).font(.system(size: 24, weight: .semibold))
+                        Text(page.subtitle).font(.system(size: 12)).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if page == .browsers {
+                        Button { model.refreshBrowsers() } label: { Image(systemName: "arrow.clockwise") }
+                            .help("Refresh browsers and profiles").accessibilityLabel("Refresh browsers and profiles")
+                    } else if page == .rules {
+                        Button { addingRule = true } label: { Label("Add rule", systemImage: "plus") }
+                            .disabled(model.configurationReadOnly)
+                    }
+                }.padding(24)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        if model.configurationReadOnly {
+                            Notice(title: "Settings are read-only", message: model.message ?? "Your saved settings could not be loaded. Repair the configuration file, then reopen Ouvre.")
+                        } else if let message = model.message {
+                            Notice(title: "Something needs attention", message: message)
+                        }
+                        switch page {
+                        case .general: general
+                        case .browsers: browsers
+                        case .rules: rules
+                        }
+                    }.padding(.horizontal, 24).padding(.bottom, 24)
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            if let message = model.message {
-                Divider()
-                Text(message).foregroundStyle(.red).font(.caption).padding(12).frame(maxWidth: .infinity, alignment: .leading)
-            }
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(nsColor: .windowBackgroundColor))
         }
+        .background(Color(nsColor: .windowBackgroundColor))
+        .frame(minWidth: 700, minHeight: 500)
         .sheet(isPresented: $addingRule) { RuleEditor(model: model, existing: nil) }
         .sheet(item: $editingRule) { rule in RuleEditor(model: model, existing: rule) }
+        .alert("Delete this rule?", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } })) {
+            Button("Cancel", role: .cancel) { pendingDelete = nil }
+            Button("Delete rule", role: .destructive) {
+                if let rule = pendingDelete { model.configuration.rules.removeAll { $0.id == rule.id }; model.save() }
+                pendingDelete = nil
+            }
+        } message: { Text(pendingDelete?.value ?? "") }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in model.refreshDefaultBrowserStatus() }
     }
-
+    private var sidebar: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            HStack(spacing: 9) {
+                Image(systemName: "arrow.up.right.square").font(.system(size: 22, weight: .medium)).foregroundStyle(.tint)
+                Text("Ouvre").font(.system(size: 18, weight: .semibold))
+            }.padding(.horizontal, 12).padding(.top, 8)
+            VStack(spacing: 4) {
+                ForEach(SettingsPage.allCases) { item in
+                    Button { page = item } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: item.symbol).foregroundStyle(Color(nsColor: .secondaryLabelColor)).frame(width: 18)
+                            Text(item.rawValue).font(.system(size: 13, weight: page == item ? .medium : .regular)).foregroundStyle(Color(nsColor: .labelColor))
+                            Spacer(minLength: 0)
+                        }.padding(.horizontal, 12).padding(.vertical, 10)
+                            .contentShape(RoundedRectangle(cornerRadius: 9))
+                            .background(page == item ? Color.accentColor.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: 9))
+                    }.buttonStyle(.plain).accessibilityAddTraits(page == item ? [.isSelected] : [])
+                }
+            }.padding(5).modifier(NavigationSurface())
+            Spacer()
+            Label("On this Mac", systemImage: "lock").font(.system(size: 11)).foregroundStyle(.secondary).padding(.horizontal, 12)
+        }.padding(14).frame(width: 180).frame(maxHeight: .infinity)
+            .background(Color(nsColor: .underPageBackgroundColor))
+    }
     private var general: some View {
-        Form {
-            LabeledContent("Default browser") {
-                Text(model.isDefaultBrowser ? "Ouvre is the default browser" : "Ouvre is not the default browser")
-                Button("Make default") { model.makeDefaultBrowser() }.disabled(model.isDefaultBrowser)
-            }
-            LabeledContent("Routing") {
-                Toggle("Pause automatic rules", isOn: $model.isPaused)
-            }
-            LabeledContent("Fallback") {
-                Picker("Fallback", selection: Binding(
-                    get: { model.configuration.fallback?.id ?? "" },
-                    set: { id in
-                        model.configuration.fallback = model.allDestinations.first { $0.id == id }
-                        model.save()
-                    })) {
-                    Text("Always ask").tag("")
-                    ForEach(model.allDestinations) { destination in Text(destination.displayName).tag(destination.id) }
-                    if let fallback = model.configuration.fallback,
-                       !model.allDestinations.contains(where: { $0.id == fallback.id }) {
-                        Text("\(fallback.displayName) (unavailable)").tag(fallback.id)
+        VStack(alignment: .leading, spacing: 18) {
+            SettingsCard {
+                HStack(alignment: .center, spacing: 14) {
+                    Image(systemName: model.isDefaultBrowser ? "checkmark.circle.fill" : "arrow.up.right.square")
+                        .font(.system(size: 27, weight: .light)).foregroundStyle(model.isDefaultBrowser ? Color.green : Color.accentColor)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(model.isDefaultBrowser ? "Ready for your links" : "Make Ouvre your link handler").font(.system(size: 13, weight: .semibold))
+                        Text(model.isDefaultBrowser ? "Links from other apps come here first." : "Choose a browser or profile when you open a link.")
+                            .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
-                }.frame(width: 260)
-            }
-            Text("Links stay on this Mac. Ouvre reads Chromium profile names only; it does not modify browser data or send links to a service.")
-                .font(.caption).foregroundStyle(.secondary)
-        }.padding(20).disabled(model.configurationReadOnly)
-    }
-
-    private var browsersView: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Installed destinations").font(.headline)
-                Spacer()
-                Button("Refresh") { model.refreshBrowsers() }
-            }
-            Text("Chrome, Helium and other supported Chromium profiles appear when Ouvre can read their Local State metadata. Safari and Firefox open as whole browsers.")
-                .font(.caption).foregroundStyle(.secondary)
-            List {
-                ForEach(model.browsers) { browser in
-                    Section(browser.name) {
-                        if let status = browser.profileStatus.message {
-                            Text(status).font(.caption).foregroundStyle(.secondary)
-                        }
-                        if browser.profileStatus.canChooseFolder {
-                            Button("Choose profile folder…") { model.chooseProfileFolder(for: browser) }
-                        }
-                        ForEach(browser.destinations) { destination in
-                            Toggle(destination.profileName ?? "Whole browser", isOn: Binding(
-                                get: { !model.configuration.hiddenDestinationIDs.contains(destination.id) },
-                                set: { isShown in
-                                    if isShown { model.configuration.hiddenDestinationIDs.remove(destination.id) }
-                                    else { model.configuration.hiddenDestinationIDs.insert(destination.id) }
-                                    model.save()
-                                })).disabled(model.configurationReadOnly)
-                        }
+                    Spacer(minLength: 8)
+                    if !model.isDefaultBrowser {
+                        Button("Set up…") { model.makeDefaultBrowser() }.controlSize(.regular)
                     }
                 }
             }
-        }.padding(20)
-    }
-
-    private var rulesView: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Rules run from top to bottom; the first match wins.").font(.headline)
-                Spacer()
-                Button("Add rule") { addingRule = true }
-            }
-            List {
-                ForEach(model.configuration.rules) { rule in
+            SettingsCard {
+                VStack(spacing: 16) {
                     HStack {
-                        Toggle("", isOn: Binding(
-                            get: { rule.isEnabled },
-                            set: { enabled in updateRule(rule) { $0.isEnabled = enabled } }))
-                            .labelsHidden()
-                        VStack(alignment: .leading) {
-                            Text(rule.value).fontWeight(.medium)
-                            Text("\(rule.pattern.label) → \(rule.action.label)").font(.caption).foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Automatic routing").font(.system(size: 13, weight: .medium))
+                            Text(model.isPaused ? "Paused. Every link opens the picker." : "Use your rules before showing the picker.")
+                                .font(.system(size: 11)).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Button("Edit") { editingRule = rule }
-                        Button { move(rule, by: -1) } label: { Image(systemName: "arrow.up") }.disabled(model.configuration.rules.first?.id == rule.id)
-                        Button { move(rule, by: 1) } label: { Image(systemName: "arrow.down") }.disabled(model.configuration.rules.last?.id == rule.id)
-                        Button(role: .destructive) { model.configuration.rules.removeAll { $0.id == rule.id }; model.save() }
-                            label: { Image(systemName: "trash") }
+                        Toggle("Automatic routing", isOn: Binding(get: { !model.isPaused }, set: { model.isPaused = !$0 }))
+                            .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                    }
+                    Divider()
+                    VStack(alignment: .leading, spacing: 9) {
+                        Text("When no rule matches").font(.system(size: 13, weight: .medium))
+                        Picker("When no rule matches", selection: Binding(get: { model.configuration.fallback?.id ?? "" }, set: { id in
+                            model.configuration.fallback = model.allDestinations.first { $0.id == id }; model.save()
+                        })) {
+                            Text("Show the picker").tag("")
+                            ForEach(model.allDestinations) { Text($0.displayName).tag($0.id) }
+                            if let fallback = model.configuration.fallback, !model.allDestinations.contains(where: { $0.id == fallback.id }) {
+                                Text("\(fallback.displayName) — unavailable").tag(fallback.id)
+                            }
+                        }.labelsHidden().frame(maxWidth: .infinity, alignment: .leading).disabled(model.configurationReadOnly)
                     }
                 }
             }
-            Divider()
-            Text("Test a URL").font(.headline)
-            TextField("https://example.com/path", text: $testURL).textFieldStyle(.roundedBorder)
-            if let url = URL(string: testURL), Routing.isWebURL(url) {
-                Text("Result: \(Routing.decision(for: url, configuration: model.configuration).label)")
-                    .font(.caption)
-            } else { Text("Enter a valid http or https URL.").font(.caption).foregroundStyle(.secondary) }
-        }.padding(20).disabled(model.configurationReadOnly)
+            HStack {
+                Button("Try the picker") { model.testPicker() }
+                Spacer()
+                Text("No account. No link history.").font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+        }
     }
-
-    private func updateRule(_ rule: Rule, edit: (inout Rule) -> Void) {
-        guard let index = model.configuration.rules.firstIndex(where: { $0.id == rule.id }) else { return }
-        edit(&model.configuration.rules[index]); model.save()
+    private var browsers: some View {
+        VStack(spacing: 12) {
+            if model.browsers.isEmpty {
+                EmptyState(symbol: "globe", title: "No browsers found", detail: "Install a browser, then refresh to look again.")
+            }
+            ForEach(model.browsers) { browser in
+                SettingsCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 10) {
+                            BrowserIcon(browser: browser)
+                            Text(browser.name).font(.system(size: 13, weight: .semibold))
+                            Spacer()
+                            if !browser.profiles.isEmpty {
+                                Text("\(browser.profiles.count) \(browser.profiles.count == 1 ? "profile" : "profiles")")
+                                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                            }
+                        }
+                        if let message = browser.profileStatus.message {
+                            VStack(alignment: .leading, spacing: 9) {
+                                Label(browser.profileStatus.canChooseFolder ? "Allow access to profiles" : "Profiles unavailable",
+                                      systemImage: browser.profileStatus.canChooseFolder ? "folder.badge.questionmark" : "exclamationmark.circle")
+                                    .font(.system(size: 12, weight: .medium))
+                                Text(browser.profileStatus.canChooseFolder ? "Choose this browser’s profile folder so Ouvre can read its profile names." : message)
+                                    .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                                if browser.profileStatus.canChooseFolder {
+                                    Button("Choose folder…") { model.chooseProfileFolder(for: browser) }
+                                        .accessibilityLabel("Choose profile folder for \(browser.name)")
+                                }
+                            }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                        }
+                        ForEach(browser.destinations) { destination in
+                            HStack {
+                                Text(destination.profileName ?? "Browser default").font(.system(size: 12)).lineLimit(2)
+                                Spacer()
+                                Toggle("Show \(destination.displayName) in picker", isOn: Binding(get: {
+                                    !model.configuration.hiddenDestinationIDs.contains(destination.id)
+                                }, set: { shown in
+                                    if shown { model.configuration.hiddenDestinationIDs.remove(destination.id) }
+                                    else { model.configuration.hiddenDestinationIDs.insert(destination.id) }
+                                    model.save()
+                                })).labelsHidden().toggleStyle(.switch).controlSize(.mini).disabled(model.configurationReadOnly)
+                            }.padding(.leading, 38)
+                        }
+                    }
+                }
+            }
+            Text("Switches control the picker. Rules can still use hidden destinations.")
+                .font(.system(size: 11)).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+    private var rules: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if model.configuration.rules.isEmpty {
+                SettingsCard {
+                    EmptyState(symbol: "arrow.triangle.branch", title: "A little less choosing", detail: "Add a rule to open a website in its usual browser or profile.")
+                }
+            } else {
+                Text("First match wins. Change the order with the arrow controls.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                SettingsCard {
+                    VStack(spacing: 0) {
+                        ForEach(Array(model.configuration.rules.enumerated()), id: \.element.id) { index, rule in
+                            if index > 0 { Divider().padding(.vertical, 12) }
+                            ruleRow(rule, index: index)
+                        }
+                    }
+                }.disabled(model.configurationReadOnly)
+            }
+            SettingsCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("Test a link", systemImage: "link").font(.system(size: 13, weight: .semibold))
+                    TextField("", text: $testURL, prompt: Text(verbatim: "https://example.com")).textFieldStyle(.roundedBorder)
+                        .accessibilityLabel("URL to test against your rules")
+                    if testURL.isEmpty {
+                        Text("See where a link would open without opening it.").font(.system(size: 11)).foregroundStyle(.secondary)
+                    } else if let url = URL(string: testURL), Routing.isWebURL(url) {
+                        let rule = model.configuration.rules.first { $0.isEnabled && Routing.matches($0, url: url) }
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(Routing.decision(for: url, configuration: model.configuration).label).font(.system(size: 12, weight: .medium))
+                            Text(rule.map { "Matched \($0.value)" } ?? "No matching rule · using your fallback")
+                                .font(.system(size: 11)).foregroundStyle(.secondary)
+                            if model.isPaused { Text("Routing is paused; incoming links will show the picker.").font(.caption).foregroundStyle(.secondary) }
+                        }.accessibilityElement(children: .combine)
+                    } else {
+                        Label("Enter a complete http or https URL.", systemImage: "exclamationmark.circle").font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+    private func ruleRow(_ rule: Rule, index: Int) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            Toggle("Enable rule for \(rule.value)", isOn: Binding(get: { rule.isEnabled }, set: { enabled in
+                if let i = model.configuration.rules.firstIndex(where: { $0.id == rule.id }) { model.configuration.rules[i].isEnabled = enabled; model.save() }
+            })).labelsHidden().toggleStyle(.checkbox)
+            Button { editingRule = rule } label: {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(rule.value).font(.system(size: 12, weight: .medium)).lineLimit(2).multilineTextAlignment(.leading)
+                    Text(rule.action.label).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(2)
+                }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+            }.buttonStyle(.plain).help("Edit rule")
+            VStack(spacing: 4) {
+                Button { move(rule, by: -1) } label: { Image(systemName: "chevron.up") }
+                    .disabled(index == 0).accessibilityLabel("Move \(rule.value) up")
+                Button { move(rule, by: 1) } label: { Image(systemName: "chevron.down") }
+                    .disabled(index == model.configuration.rules.count - 1).accessibilityLabel("Move \(rule.value) down")
+            }.buttonStyle(.borderless).font(.system(size: 10))
+            Button { pendingDelete = rule } label: { Image(systemName: "minus.circle") }
+                .buttonStyle(.borderless).help("Delete rule").accessibilityLabel("Delete rule for \(rule.value)")
+        }
     }
     private func move(_ rule: Rule, by offset: Int) {
-        guard let index = model.configuration.rules.firstIndex(where: { $0.id == rule.id }),
-              model.configuration.rules.indices.contains(index + offset) else { return }
+        guard let index = model.configuration.rules.firstIndex(where: { $0.id == rule.id }), model.configuration.rules.indices.contains(index + offset) else { return }
         model.configuration.rules.swapAt(index, index + offset); model.save()
     }
 }
 
+struct SettingsCard<Content: View>: View {
+    @ViewBuilder var content: Content
+    var body: some View {
+        content.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(0.07)))
+    }
+}
+
 private extension RuleAction {
-    var label: String { switch self { case .picker: "Ask every time"; case .destination(let destination): destination.displayName } }
+    var label: String { switch self { case .picker: "Show the picker"; case .destination(let destination): destination.displayName } }
 }
 private extension RoutingDecision {
-    var label: String { switch self { case .picker: "Ask every time"; case .destination(let destination): destination.displayName } }
+    var label: String { switch self { case .picker: "Show the picker"; case .destination(let destination): destination.displayName } }
 }
 
 struct RuleEditor: View {
@@ -239,35 +486,45 @@ struct RuleEditor: View {
     @State private var pattern: RulePattern = .exactDomain
     @State private var value = ""
     @State private var targetID = ""
-
+    @State private var attempted = false
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(existing == nil ? "Add rule" : "Edit rule").font(.title2.bold())
-            Picker("Match", selection: $pattern) {
-                ForEach(RulePattern.allCases, id: \.self) { pattern in Text(pattern.label).tag(pattern) }
+        VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(existing == nil ? "New rule" : "Edit rule").font(.system(size: 21, weight: .semibold))
+                Text("Give a website a preferred destination.").font(.system(size: 12)).foregroundStyle(.secondary)
             }
-            TextField(pattern == .urlPrefix ? "https://example.com/path" : "example.com", text: $value)
-                .textFieldStyle(.roundedBorder)
-            Picker("Open in", selection: $targetID) {
-                Text("Ask every time").tag("")
-                ForEach(model.allDestinations) { destination in Text(destination.displayName).tag(destination.id) }
-                if case .destination(let previous) = existing?.action,
-                   !model.allDestinations.contains(where: { $0.id == previous.id }) {
-                    Text("\(previous.displayName) (unavailable)").tag(previous.id)
+            VStack(alignment: .leading, spacing: 10) {
+                Text("WHEN A LINK MATCHES").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                Picker("Match type", selection: $pattern) {
+                    ForEach(RulePattern.allCases, id: \.self) { Text($0.label).tag($0) }
+                }.labelsHidden()
+                TextField("", text: $value, prompt: Text(verbatim: pattern == .urlPrefix ? "https://example.com/work/" : "example.com")).textFieldStyle(.roundedBorder)
+                    .accessibilityLabel("Domain or URL pattern")
+                if !value.isEmpty || attempted, let error = Routing.validationError(pattern: pattern, value: value) {
+                    Label(error, systemImage: "exclamationmark.circle").font(.system(size: 11)).foregroundStyle(.secondary)
+                } else {
+                    Text(pattern == .domainAndSubdomains ? "Includes this domain and all of its subdomains." : pattern == .urlPrefix ? "Match the beginning of a URL. Include http:// or https://." : "Only this domain, without subdomains.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
             }
-            if let error = Routing.validationError(pattern: pattern, value: value) {
-                Text(error).font(.caption).foregroundStyle(.red)
+            VStack(alignment: .leading, spacing: 10) {
+                Text("OPEN IN").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+                Picker("Destination", selection: $targetID) {
+                    Text("Show the picker").tag("")
+                    ForEach(model.allDestinations) { Text($0.displayName).tag($0.id) }
+                    if case .destination(let previous) = existing?.action, !model.allDestinations.contains(where: { $0.id == previous.id }) {
+                        Text("\(previous.displayName) — unavailable").tag(previous.id)
+                    }
+                }.labelsHidden()
             }
+            Divider()
             HStack {
                 Spacer()
-                Button("Cancel") { dismiss() }
-                Button("Save") { save() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(Routing.validationError(pattern: pattern, value: value) != nil)
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(existing == nil ? "Add rule" : "Save changes") { save() }
+                    .keyboardShortcut(.defaultAction).disabled(Routing.validationError(pattern: pattern, value: value) != nil || model.configurationReadOnly)
             }
-        }
-        .padding(24).frame(width: 440)
+        }.padding(26).frame(width: 420).background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
             if let existing {
                 pattern = existing.pattern; value = existing.value
@@ -275,9 +532,10 @@ struct RuleEditor: View {
             }
         }
     }
-
     private func save() {
-        let chosen = model.allDestinations.first(where: { $0.id == targetID })
+        attempted = true
+        guard Routing.validationError(pattern: pattern, value: value) == nil, !model.configurationReadOnly else { return }
+        let chosen = model.allDestinations.first { $0.id == targetID }
         let previous: Destination? = {
             if case .destination(let destination) = existing?.action, destination.id == targetID { return destination }
             return nil
@@ -285,9 +543,8 @@ struct RuleEditor: View {
         let action: RuleAction = (chosen ?? previous).map(RuleAction.destination) ?? .picker
         let rule = Rule(id: existing?.id ?? UUID(), isEnabled: existing?.isEnabled ?? true,
                         pattern: pattern, value: value.trimmingCharacters(in: .whitespacesAndNewlines), action: action)
-        if let index = model.configuration.rules.firstIndex(where: { $0.id == rule.id }) {
-            model.configuration.rules[index] = rule
-        } else { model.configuration.rules.append(rule) }
+        if let index = model.configuration.rules.firstIndex(where: { $0.id == rule.id }) { model.configuration.rules[index] = rule }
+        else { model.configuration.rules.append(rule) }
         model.save(); dismiss()
     }
 }
