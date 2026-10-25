@@ -32,6 +32,7 @@ import SwiftUI
                     if !CommandLine.arguments.contains("--interactions-only") { try await captureAll(output: URL(fileURLWithPath: output)) }
                     try await interactionChecks()
                     try await numberShortcutChecks(output: URL(fileURLWithPath: output))
+                    try await orderChecks(output: URL(fileURLWithPath: output))
                     try await settingsChecks()
                     try await editorChecks()
                     try await fallbackAndDeleteChecks()
@@ -209,6 +210,70 @@ import SwiftUI
         precondition(model.configuration.rules[1].value == "figma.com", "Rule reorder")
         print("PASS settings: routing toggle, profile visibility, rule enable, reorder, sidebar navigation")
         window.close()
+    }
+
+    @MainActor static func orderChecks(output: URL) async throws {
+        let model = fixture()
+        let settings = NSHostingView(rootView: SettingsView(model: model, page: .browsers))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 620),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = settings
+        window.makeKeyAndOrderFront(nil)
+        try await Task.sleep(nanoseconds: 300_000_000)
+        func click(_ x: CGFloat, _ y: CGFloat) async throws {
+            for type: NSEvent.EventType in [.leftMouseDown, .leftMouseUp] {
+                window.sendEvent(NSEvent.mouseEvent(with: type, location: NSPoint(x: x, y: 620 - y),
+                    modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                    windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!)
+            }
+            try await Task.sleep(nanoseconds: 200_000_000)
+        }
+        try await click(681, 191) // Work profile's up arrow.
+        precondition(model.orderedDestinations(for: model.browsers[0]).first?.profileName == "Work", "Profile up control")
+        try await click(751, 126) // Helium browser's down arrow.
+        precondition(model.orderedBrowsers.first?.name == "Google Chrome", "Browser down control")
+        precondition(model.visibleDestinations.map(\.profileName) == [nil, "Work", "Personal", nil], "Picker order")
+        func capture(_ view: NSView, as name: String) throws {
+            view.layoutSubtreeIfNeeded()
+            view.displayIfNeeded()
+            guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { fatalError("No bitmap") }
+            view.cacheDisplay(in: view.bounds, to: bitmap)
+            try bitmap.representation(using: .png, properties: [:])!.write(to: output.appendingPathComponent(name))
+        }
+        try capture(settings, as: "ordered-settings.png")
+        window.close()
+
+        let picker = NSHostingView(rootView: PickerView(model: model))
+        let pickerWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 470, height: 450),
+                                    styleMask: [.titled], backing: .buffered, defer: false)
+        pickerWindow.isReleasedWhenClosed = false
+        pickerWindow.contentView = picker
+        pickerWindow.makeKeyAndOrderFront(nil)
+        try await Task.sleep(nanoseconds: 300_000_000)
+        try capture(picker, as: "ordered-picker.png")
+        sendKey(19, characters: "2", to: pickerWindow)
+        try await Task.sleep(nanoseconds: 100_000_000)
+        precondition(model.previewLastChoice?.profileName == "Work", "Second shortcut after reordering")
+        print("PASS order: native browser/profile arrows and reordered picker shortcut")
+        pickerWindow.close()
+
+        let restored = fixture()
+        restored.configuration = model.configuration
+        restored.configuration.hiddenDestinationIDs.insert(restored.allDestinations[0].id)
+        precondition(restored.visibleDestinations.map(\.profileName) == ["Work", "Personal", nil], "Hidden destination order")
+        restored.browsers.removeAll { $0.bundleID == "com.google.Chrome" }
+        precondition(restored.visibleDestinations.first?.profileName == "Work", "Missing browser order")
+        restored.browsers.append(Browser(bundleID: "fixture.new", name: "New browser",
+                                         appURL: URL(fileURLWithPath: "/Applications/Safari.app"), profiles: []))
+        precondition(restored.orderedBrowsers.last?.bundleID == "fixture.new", "New browser append")
+        print("PASS order: restored settings, hidden/missing destinations, new browser append")
+
+        let before = model.configuration.browserOrder
+        model.configurationReadOnly = true
+        model.moveBrowser("com.apple.Safari", by: -1)
+        precondition(model.configuration.browserOrder == before, "Read-only order mutation")
+        print("PASS order: read-only guard")
     }
 
     @MainActor static func editorChecks() async throws {

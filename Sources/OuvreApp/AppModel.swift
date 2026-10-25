@@ -44,7 +44,37 @@ import SwiftUI
         allDestinations.filter { !configuration.hiddenDestinationIDs.contains($0.id) }
     }
 
-    var allDestinations: [Destination] { browsers.flatMap(\.destinations) }
+    var orderedBrowsers: [Browser] {
+        let positions = Dictionary(uniqueKeysWithValues: SavedOrder.applied(browsers.map(\.bundleID), saved: configuration.browserOrder)
+            .enumerated().map { ($0.element, $0.offset) })
+        return browsers.sorted { positions[$0.bundleID, default: Int.max] < positions[$1.bundleID, default: Int.max] }
+    }
+
+    func orderedDestinations(for browser: Browser) -> [Destination] {
+        let destinations = browser.destinations
+        let ids = SavedOrder.applied(destinations.map(\.id), saved: configuration.destinationOrder[browser.bundleID] ?? [])
+        let positions = Dictionary(uniqueKeysWithValues: ids.enumerated().map { ($0.element, $0.offset) })
+        return destinations.sorted { positions[$0.id, default: Int.max] < positions[$1.id, default: Int.max] }
+    }
+
+    var allDestinations: [Destination] { orderedBrowsers.flatMap { orderedDestinations(for: $0) } }
+
+    func moveBrowser(_ id: String, by offset: Int) {
+        guard !configurationReadOnly,
+              let updated = SavedOrder.moving(id, by: offset, available: orderedBrowsers.map(\.bundleID), saved: configuration.browserOrder)
+        else { return }
+        configuration.browserOrder = updated
+        save()
+    }
+
+    func moveDestination(_ id: String, in browser: Browser, by offset: Int) {
+        guard !configurationReadOnly,
+              let updated = SavedOrder.moving(id, by: offset, available: orderedDestinations(for: browser).map(\.id),
+                                              saved: configuration.destinationOrder[browser.bundleID] ?? [])
+        else { return }
+        configuration.destinationOrder[browser.bundleID] = updated
+        save()
+    }
 
     func refreshBrowsers() {
         guard !isPreview else { return }

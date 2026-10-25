@@ -377,7 +377,7 @@ struct SettingsView: View {
             if model.browsers.isEmpty {
                 EmptyState(symbol: "globe", title: "No browsers found", detail: "Install a browser, then refresh to look again.")
             }
-            ForEach(model.browsers) { browser in
+            ForEach(Array(model.orderedBrowsers.enumerated()), id: \.element.id) { browserIndex, browser in
                 SettingsCard {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack(spacing: 10) {
@@ -387,6 +387,12 @@ struct SettingsView: View {
                             if !browser.profiles.isEmpty {
                                 Text("\(browser.profiles.count) \(browser.profiles.count == 1 ? "profile" : "profiles")")
                                     .font(.system(size: 11)).foregroundStyle(.secondary)
+                            }
+                            orderButton("Move \(browser.name) up", symbol: "arrow.up", disabled: browserIndex == 0) {
+                                model.moveBrowser(browser.bundleID, by: -1)
+                            }
+                            orderButton("Move \(browser.name) down", symbol: "arrow.down", disabled: browserIndex == model.orderedBrowsers.count - 1) {
+                                model.moveBrowser(browser.bundleID, by: 1)
                             }
                         }
                         if let message = browser.profileStatus.message {
@@ -403,10 +409,18 @@ struct SettingsView: View {
                             }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
                                 .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
                         }
-                        ForEach(browser.destinations) { destination in
+                        ForEach(Array(model.orderedDestinations(for: browser).enumerated()), id: \.element.id) { destinationIndex, destination in
                             HStack {
                                 Text(destination.profileName ?? "Browser default").font(.system(size: 12)).lineLimit(2)
                                 Spacer()
+                                if browser.destinations.count > 1 {
+                                    orderButton("Move \(destination.displayName) up", symbol: "arrow.up", disabled: destinationIndex == 0) {
+                                        model.moveDestination(destination.id, in: browser, by: -1)
+                                    }
+                                    orderButton("Move \(destination.displayName) down", symbol: "arrow.down", disabled: destinationIndex == browser.destinations.count - 1) {
+                                        model.moveDestination(destination.id, in: browser, by: 1)
+                                    }
+                                }
                                 Toggle("Show \(destination.displayName) in picker", isOn: Binding(get: {
                                     !model.configuration.hiddenDestinationIDs.contains(destination.id)
                                 }, set: { shown in
@@ -419,9 +433,15 @@ struct SettingsView: View {
                     }
                 }
             }
-            Text("Switches control the picker. Rules can still use hidden destinations.")
+            Text("Arrows set the browser and profile order in the picker. Switches control visibility. Rules can still use hidden destinations.")
                 .font(.system(size: 11)).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+    private func orderButton(_ label: String, symbol: String, disabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) { Image(systemName: symbol).frame(width: 18, height: 18) }
+            .buttonStyle(.borderless).controlSize(.small)
+            .accessibilityLabel(label).help(label)
+            .disabled(disabled || model.configurationReadOnly)
     }
     private var rules: some View {
         VStack(alignment: .leading, spacing: 16) {

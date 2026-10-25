@@ -13,6 +13,8 @@ open dist/Ouvre.app
 
 The script produces an ad hoc signed `dist/Ouvre.app`. The app lives in the menu bar. Open **Settings…** to inspect browsers, show or hide picker destinations, add rules, and test a URL. Choose **Make default** in General only when you want macOS to send web links to Ouvre. Merely building or launching the app does not change the default browser.
 
+In **Settings → Browsers**, use the arrows on browser cards to set browser order and the arrows beside profiles to set their order within a browser. The picker and its numbered shortcuts follow this saved order. New browsers and profiles appear after saved entries; temporarily missing ones return to their saved positions. Visibility switches do not change the order.
+
 Run core tests with `swift test`. The [integration verification](docs/VERIFICATION.md) records tested link and profile delivery with a disposable Chrome data directory; the [manual test checklist](docs/TESTING.md) covers the remaining UI and browser checks.
 
 In the picker, press **1–9** to open the corresponding numbered destination when search is empty. While searching, digits enter search text; **⌘1–9** opens the corresponding filtered result. Only the first nine visible results receive numbers. Unavailable shortcuts do nothing, and hidden destinations never receive a number. Use arrows and Return for later results, or Escape to dismiss. To start a search with a digit from 1–9, paste the query.

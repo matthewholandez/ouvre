@@ -61,12 +61,54 @@ public struct Configuration: Codable, Sendable {
     public var rules: [Rule]
     public var hiddenDestinationIDs: Set<String>
     public var fallback: Destination?
+    public var browserOrder: [String]
+    public var destinationOrder: [String: [String]]
 
-    public init(version: Int = Configuration.currentVersion, rules: [Rule] = [], hiddenDestinationIDs: Set<String> = [], fallback: Destination? = nil) {
+    public init(version: Int = Configuration.currentVersion, rules: [Rule] = [], hiddenDestinationIDs: Set<String> = [], fallback: Destination? = nil,
+                browserOrder: [String] = [], destinationOrder: [String: [String]] = [:]) {
         self.version = version
         self.rules = rules
         self.hiddenDestinationIDs = hiddenDestinationIDs
         self.fallback = fallback
+        self.browserOrder = browserOrder
+        self.destinationOrder = destinationOrder
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case version, rules, hiddenDestinationIDs, fallback, browserOrder, destinationOrder
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        version = try values.decode(Int.self, forKey: .version)
+        rules = try values.decode([Rule].self, forKey: .rules)
+        hiddenDestinationIDs = try values.decode(Set<String>.self, forKey: .hiddenDestinationIDs)
+        fallback = try values.decodeIfPresent(Destination.self, forKey: .fallback)
+        browserOrder = try values.decodeIfPresent([String].self, forKey: .browserOrder) ?? []
+        destinationOrder = try values.decodeIfPresent([String: [String]].self, forKey: .destinationOrder) ?? [:]
+    }
+}
+
+public enum SavedOrder {
+    /// Retain absent IDs in storage; display only discovered IDs and append new ones.
+    public static func applied(_ ids: [String], saved: [String]) -> [String] {
+        let available = Set(ids)
+        var seen = Set<String>()
+        return (saved + ids).filter { available.contains($0) && seen.insert($0).inserted }
+    }
+
+    /// Swap adjacent displayed items without discarding currently undiscovered IDs.
+    public static func moving(_ id: String, by offset: Int, available: [String], saved: [String]) -> [String]? {
+        guard offset == -1 || offset == 1 else { return nil }
+        let displayed = applied(available, saved: saved)
+        guard let index = displayed.firstIndex(of: id), displayed.indices.contains(index + offset) else { return nil }
+        var result = saved
+        let known = Set(result)
+        result.append(contentsOf: available.filter { !known.contains($0) })
+        let other = displayed[index + offset]
+        guard let first = result.firstIndex(of: id), let second = result.firstIndex(of: other) else { return nil }
+        result.swapAt(first, second)
+        return result
     }
 }
 
