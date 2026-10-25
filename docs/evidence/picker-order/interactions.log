@@ -1,0 +1,33 @@
+PASS interaction: arrows
+PASS interaction: search
+PASS interaction: mouse
+PASS interaction: long-list
+PASS interaction: escape
+PASS interaction: busy
+PASS interaction: no-match
+PASS number shortcut: bare
+PASS number shortcut: command
+PASS number shortcut: filtered
+PASS number shortcut: digit-search
+PASS number shortcut: hidden
+PASS number shortcut: ninth
+PASS number shortcut: tenth
+PASS number shortcut: out-of-range
+PASS number shortcut: busy
+PASS number shortcut: repeat
+PASS number shortcut: no-match
+PASS number shortcut: option
+PASS number shortcut: control
+PASS number shortcut: shift
+PASS number shortcut: command-shift
+PASS number shortcut: function
+PASS order: native browser/profile arrows and reordered picker shortcut
+PASS order: restored settings, hidden/missing destinations, new browser append
+PASS order: read-only guard
+PASS settings: routing toggle, profile visibility, rule enable, reorder, sidebar navigation
+PASS editor: add and invalid input
+PASS editor: edit and invalid input
+PASS settings: fallback picker selected net.imput.helium|Default
+PASS settings: destructive rule deletion requires confirmation
+PASS editor: invalid Return stays open; valid Return saves once
+PASS errors: independent lifetimes and successful setup recovery

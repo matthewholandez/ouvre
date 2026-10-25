@@ -48,4 +48,33 @@ final class RoutingTests: XCTestCase {
         try store.save(Configuration(version: 999))
         XCTAssertThrowsError(try store.load())
     }
+
+    func testSavedOrderKeepsMissingIDsAndAppendsNewIDs() {
+        let saved = ["browser.a", "browser.absent", "browser.b"]
+        XCTAssertEqual(SavedOrder.applied(["browser.a", "browser.b", "browser.new"], saved: saved),
+                       ["browser.a", "browser.b", "browser.new"])
+        let moved = SavedOrder.moving("browser.b", by: -1,
+                                      available: ["browser.a", "browser.b", "browser.new"], saved: saved)!
+        XCTAssertEqual(moved, ["browser.b", "browser.absent", "browser.a", "browser.new"])
+        XCTAssertEqual(SavedOrder.applied(["browser.a", "browser.absent", "browser.b", "browser.new"], saved: moved),
+                       ["browser.b", "browser.absent", "browser.a", "browser.new"])
+        XCTAssertNil(SavedOrder.moving("browser.b", by: -1, available: ["browser.b", "browser.a"], saved: moved))
+    }
+
+    func testOldConfigurationDecodesAndNewOrderPersists() throws {
+        let old = Data(#"{"version":1,"rules":[],"hiddenDestinationIDs":[],"fallback":null}"#.utf8)
+        var configuration = try JSONDecoder().decode(Configuration.self, from: old)
+        XCTAssertTrue(configuration.browserOrder.isEmpty)
+        XCTAssertTrue(configuration.destinationOrder.isEmpty)
+        configuration.browserOrder = ["browser.b", "browser.a"]
+        configuration.destinationOrder = ["browser.b": ["browser.b|Profile 1", "browser.b|Default"]]
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ConfigurationStore(fileURL: directory.appendingPathComponent("config.json"))
+        try store.save(configuration)
+        let reloaded = try store.load()
+        XCTAssertEqual(reloaded.browserOrder, configuration.browserOrder)
+        XCTAssertEqual(reloaded.destinationOrder, configuration.destinationOrder)
+        XCTAssertThrowsError(try JSONDecoder().decode(Configuration.self, from: Data(#"{"version":1,"hiddenDestinationIDs":[]}"#.utf8)))
+    }
 }
