@@ -121,6 +121,16 @@ struct PickerView: View {
                     .onKeyPress(.downArrow) { moveSelection(1); return .handled }
                     .onKeyPress(.upArrow) { moveSelection(-1); return .handled }
                     .onKeyPress(.return) { chooseSelected(); return .handled }
+                    .onKeyPress(characters: CharacterSet(charactersIn: "123456789"), phases: [.down, .repeat]) { press in
+                        let modifiers = press.modifiers
+                        guard modifiers == .command || (modifiers.isEmpty && query.isEmpty) else { return .ignored }
+                        // Consume unavailable numbers too: an empty search stays empty.
+                        if press.phase == .down, let number = Int(press.characters), !model.isLaunching,
+                           destinations.indices.contains(number - 1) {
+                            model.choose(destinations[number - 1])
+                        }
+                        return .handled
+                    }
                 if !query.isEmpty {
                     Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }
                         .buttonStyle(.plain).accessibilityLabel("Clear search")
@@ -152,7 +162,8 @@ struct PickerView: View {
                     ProgressView().controlSize(.small)
                     Text("Opening…").font(.caption).foregroundStyle(.secondary)
                 } else {
-                    Text("↑↓ to select  ·  ↵ to open").font(.system(size: 11)).foregroundStyle(.secondary)
+                    Text(query.isEmpty ? "1–9 to open  ·  ↑↓ to select  ·  ↵ to open" : "⌘1–9 to open  ·  ↑↓ to select  ·  ↵ to open")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Button("Settings…") { model.showSettings() }.buttonStyle(.link).font(.system(size: 11))
@@ -176,6 +187,13 @@ struct PickerView: View {
                         .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer()
+                if index < 9 {
+                    Text("\(query.isEmpty ? "" : "⌘")\(index + 1)")
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.secondary).padding(.horizontal, 6).padding(.vertical, 3)
+                        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 4))
+                        .accessibilityLabel("Shortcut \(query.isEmpty ? "" : "Command ")\(index + 1)")
+                }
                 if index == selection {
                     Image(systemName: "return").font(.system(size: 12)).foregroundStyle(.secondary)
                 }

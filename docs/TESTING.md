@@ -44,6 +44,15 @@ installed browsers; a successful build alone does not prove them.
 ## Picker and accessibility
 
 - Search, arrow-key navigation, Return, and Escape work without a mouse.
+- Verify 1–9 opens the numbered visible destination with empty search; ⌘1–9
+  opens the numbered filtered result. Digits typed into a nonempty search remain
+  text. Hidden destinations do not count, and only the first nine results have badges.
+- Check unavailable numbers leave empty search unchanged, shortcuts with no matches
+  or during launch do nothing, and Shift/Option/Control combinations do not open a
+  destination. Holding a shortcut must not open another queued link.
+- Run `scripts/ui/capture.sh /tmp/ouvre-ui-review --interactions-only` for native
+  keyboard interaction assertions and `numbered-bare.png` / `numbered-filtered.png`
+  proof. Preview fixtures record destination choices without launching browsers.
 - Test an empty result set and a destination list longer than the panel.
 - Confirm the full URL is inspectable/copyable without fetching its contents.
 - Check light/dark appearance, VoiceOver labels, and a second display.
