@@ -15,6 +15,8 @@ The script produces an ad hoc signed `dist/Ouvre.app`. The app lives in the menu
 
 Run core tests with `swift test`. The [integration verification](docs/VERIFICATION.md) records tested link and profile delivery with a disposable Chrome data directory; the [manual test checklist](docs/TESTING.md) covers the remaining UI and browser checks.
 
+In the picker, press **1–9** to open the corresponding numbered destination when search is empty. While searching, digits enter search text; **⌘1–9** opens the corresponding filtered result. Only the first nine visible results receive numbers. Unavailable shortcuts do nothing, and hidden destinations never receive a number. Use arrows and Return for later results, or Escape to dismiss. To start a search with a digit from 1–9, paste the query.
+
 ## Rules and destinations
 
 Rules are evaluated top to bottom. The first enabled match wins. A rule can match an exact domain, a domain and its subdomains, or a full `http`/`https` URL prefix. URL prefixes require the same scheme, host, and port. A prefix containing a query requires the same path and a matching query prefix; URL fragments and credentials are not accepted in rule prefixes. The fallback is the picker unless you choose a destination.

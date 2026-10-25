@@ -31,6 +31,7 @@ import SwiftUI
                 do {
                     if !CommandLine.arguments.contains("--interactions-only") { try await captureAll(output: URL(fileURLWithPath: output)) }
                     try await interactionChecks()
+                    try await numberShortcutChecks(output: URL(fileURLWithPath: output))
                     try await settingsChecks()
                     try await editorChecks()
                     try await fallbackAndDeleteChecks()
@@ -55,12 +56,77 @@ import SwiftUI
     }
 
 
-    @MainActor static func sendKey(_ code: UInt16, characters: String, to window: NSWindow) {
-        let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+    @MainActor static func sendKey(_ code: UInt16, characters: String, modifiers: NSEvent.ModifierFlags = [], repeatKey: Bool = false, to window: NSWindow) {
+        let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: modifiers,
                                     timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
                                     context: nil, characters: characters, charactersIgnoringModifiers: characters,
-                                    isARepeat: false, keyCode: code)!
-        window.sendEvent(event)
+                                    isARepeat: repeatKey, keyCode: code)!
+        NSApp.sendEvent(event)
+    }
+
+    @MainActor static func numberShortcutChecks(output: URL) async throws {
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        for scenario in ["bare", "command", "filtered", "digit-search", "hidden", "ninth", "tenth", "out-of-range", "busy", "repeat", "no-match", "option", "control", "shift", "command-shift", "function"] {
+            let model = fixture()
+            if ["ninth", "tenth"].contains(scenario) {
+                model.browsers = (0..<12).map { Browser(bundleID: "fixture.\($0)", name: "Browser \($0)", appURL: URL(fileURLWithPath: "/Applications/Safari.app"), profiles: []) }
+            }
+            if scenario == "digit-search" {
+                model.browsers = [Browser(bundleID: "fixture.numeric", name: "Browser 2", appURL: URL(fileURLWithPath: "/Applications/Safari.app"), profiles: [])]
+            }
+            if scenario == "hidden" { model.configuration.hiddenDestinationIDs.insert(model.visibleDestinations[0].id) }
+            if scenario == "busy" { model.isLaunching = true }
+            let expected = model.visibleDestinations
+            let view = NSHostingView(rootView: PickerView(model: model))
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 470, height: 450), styleMask: [.titled], backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            window.contentView = view
+            window.makeKeyAndOrderFront(nil)
+            try await Task.sleep(nanoseconds: 300_000_000)
+            guard let field = window.firstResponder as? NSTextView else { fatalError("No picker search focus") }
+            if ["filtered", "digit-search", "no-match"].contains(scenario) {
+                field.insertText(scenario == "filtered" ? "Work" : scenario == "digit-search" ? "Browser " : "missing", replacementRange: NSRange(location: NSNotFound, length: 0))
+                try await Task.sleep(nanoseconds: 100_000_000)
+            }
+            if scenario == "bare" || scenario == "filtered" {
+                view.layoutSubtreeIfNeeded()
+                window.displayIfNeeded()
+                let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds)!
+                view.cacheDisplay(in: view.bounds, to: bitmap)
+                try bitmap.representation(using: .png, properties: [:])!.write(to: output.appendingPathComponent("numbered-\(scenario).png"))
+            }
+            switch scenario {
+            case "bare", "hidden", "digit-search": sendKey(19, characters: "2", to: window)
+            case "command": sendKey(19, characters: "2", modifiers: .command, to: window)
+            case "filtered", "no-match": sendKey(18, characters: "1", modifiers: .command, to: window)
+            case "ninth", "out-of-range": sendKey(25, characters: "9", to: window)
+            case "tenth":
+                for _ in 0..<9 { sendKey(125, characters: "\u{F701}", to: window) }
+                sendKey(36, characters: "\r", to: window)
+            case "busy": sendKey(18, characters: "1", to: window); sendKey(18, characters: "1", modifiers: .command, to: window)
+            case "repeat": sendKey(18, characters: "1", repeatKey: true, to: window)
+            default:
+                let flags: NSEvent.ModifierFlags = scenario == "option" ? .option : scenario == "control" ? .control : scenario == "shift" ? .shift : scenario == "function" ? .function : [.command, .shift]
+                sendKey(18, characters: "1", modifiers: flags, to: window)
+            }
+            try await Task.sleep(nanoseconds: 100_000_000)
+            switch scenario {
+            case "bare", "command", "hidden": precondition(model.previewLastChoice == expected[1], scenario)
+            case "filtered": precondition(model.previewLastChoice?.profileDirectory == "Profile 1", scenario)
+            case "ninth": precondition(model.previewLastChoice == expected[8], scenario)
+            case "tenth": precondition(model.previewLastChoice == expected[9], scenario)
+            case "digit-search":
+                precondition(model.previewLastChoice == nil && field.string == "Browser 2", "Digit should be search text")
+                sendKey(36, characters: "\r", to: window)
+                try await Task.sleep(nanoseconds: 100_000_000)
+                precondition(model.previewLastChoice == expected[0], scenario)
+            default:
+                precondition(model.previewLastChoice == nil && model.currentURL != nil, scenario)
+                if ["out-of-range", "busy", "repeat"].contains(scenario) { precondition(field.string.isEmpty, "Unavailable shortcut changed search") }
+            }
+            print("PASS number shortcut: \(scenario)")
+            window.close()
+        }
     }
 
     @MainActor static func interactionChecks() async throws {
