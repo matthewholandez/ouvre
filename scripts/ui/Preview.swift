@@ -29,6 +29,11 @@ import SwiftUI
         DispatchQueue.main.async {
             Task { @MainActor in
                 do {
+                    if CommandLine.arguments.contains("--settings-only") {
+                        try await settingsChecks()
+                        NSApp.terminate(nil)
+                        return
+                    }
                     if !CommandLine.arguments.contains("--interactions-only") { try await captureAll(output: URL(fileURLWithPath: output)) }
                     try await interactionChecks()
                     try await numberShortcutChecks(output: URL(fileURLWithPath: output))
@@ -200,6 +205,10 @@ import SwiftUI
         }
         try await click(740, 214)
         precondition(model.isPaused, "Routing toggle")
+        try await click(740, 281)
+        precondition(!model.configuration.showInMenuBar, "Menu bar toggle did not hide")
+        try await click(740, 281)
+        precondition(model.configuration.showInMenuBar, "Menu bar toggle did not restore")
         try await click(90, 134)
         try await click(740, 188)
         precondition(model.configuration.hiddenDestinationIDs.contains(model.browsers[0].destinations[1].id), "Profile visibility")
@@ -208,7 +217,10 @@ import SwiftUI
         precondition(!model.configuration.rules[0].isEnabled, "Rule enable")
         try await click(730, 164)
         precondition(model.configuration.rules[1].value == "figma.com", "Rule reorder")
-        print("PASS settings: routing toggle, profile visibility, rule enable, reorder, sidebar navigation")
+        model.configurationReadOnly = true
+        model.setShowInMenuBar(false)
+        precondition(model.configuration.showInMenuBar, "Read-only configuration hid the menu bar item")
+        print("PASS settings: routing and menu bar toggles, read-only guard, profile visibility, rule enable, reorder, sidebar navigation")
         window.close()
     }
 
@@ -334,7 +346,7 @@ import SwiftUI
             }
             try await Task.sleep(nanoseconds: 200_000_000)
         }
-        try await click(300, 302)
+        try await click(300, 369)
         sendKey(125, characters: "\u{F701}", to: window)
         sendKey(36, characters: "\r", to: window)
         try await Task.sleep(nanoseconds: 250_000_000)

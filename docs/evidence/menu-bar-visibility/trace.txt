@@ -1,0 +1,14 @@
+menu-bar visible=true
+menu visible=true paused=false pause-title=Pause routing picker-title=Try the picker… header=Ouvre. Setup needed · Open Settings tooltip=Ouvre settings-visible=false current-url=none
+menu-bar visible=false
+menu visible=false paused=false pause-title=Pause routing picker-title=Try the picker… header=Ouvre. Setup needed · Open Settings tooltip=Ouvre settings-visible=false current-url=none
+receive https://example.org/ouvre-menu-hidden?marker=hidden-routing#fragment
+process https://example.org/ouvre-menu-hidden?marker=hidden-routing#fragment
+picker https://example.org/ouvre-menu-hidden?marker=hidden-routing#fragment
+dismiss https://example.org/ouvre-menu-hidden?marker=hidden-routing#fragment
+menu visible=false paused=false pause-title=Pause routing picker-title=Try the picker… header=Ouvre. Setup needed · Open Settings tooltip=Ouvre settings-visible=true current-url=none
+menu-bar visible=false
+menu visible=false paused=false pause-title=Pause routing picker-title=Try the picker… header=Ouvre. Setup needed · Open Settings tooltip=Ouvre settings-visible=false current-url=none
+menu visible=false paused=false pause-title=Pause routing picker-title=Try the picker… header=Ouvre. Setup needed · Open Settings tooltip=Ouvre settings-visible=true current-url=none
+menu-bar visible=true
+menu visible=true paused=false pause-title=Pause routing picker-title=Try the picker… header=Ouvre. Setup needed · Open Settings tooltip=Ouvre settings-visible=true current-url=none

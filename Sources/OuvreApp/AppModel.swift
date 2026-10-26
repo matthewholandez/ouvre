@@ -124,6 +124,22 @@ import SwiftUI
         catch { configurationMessage = error.localizedDescription }
     }
 
+    func setShowInMenuBar(_ visible: Bool) {
+        guard configuration.showInMenuBar != visible else { return }
+        guard !configurationReadOnly else {
+            configurationMessage = "Configuration could not be loaded. Fix or move the config file before changing settings."
+            return
+        }
+        var updated = configuration
+        updated.showInMenuBar = visible
+        if !isPreview {
+            do { try store.save(updated) }
+            catch { configurationMessage = error.localizedDescription; return }
+        }
+        configuration = updated
+        configurationMessage = nil
+    }
+
     func receive(_ url: URL) {
         enqueue(url, forcePicker: false)
     }

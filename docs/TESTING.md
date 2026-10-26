@@ -14,6 +14,9 @@ installed browsers; a successful build alone does not prove them.
 - Cancel the current picker. Only that URL should be discarded.
 - Double-click a destination or press Return repeatedly. Only one launch should
   occur for the current URL; queued URLs must not be lost.
+- Hide the menu bar item in Settings → General. Send an HTTP(S) URL to Ouvre and
+  confirm normal routing. Reopen Ouvre from Applications or Spotlight to reach
+  Settings, restore the item, and confirm the choice survives an app restart.
 
 ## Destinations
 

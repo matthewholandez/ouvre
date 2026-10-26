@@ -63,19 +63,21 @@ public struct Configuration: Codable, Sendable {
     public var fallback: Destination?
     public var browserOrder: [String]
     public var destinationOrder: [String: [String]]
+    public var showInMenuBar: Bool
 
     public init(version: Int = Configuration.currentVersion, rules: [Rule] = [], hiddenDestinationIDs: Set<String> = [], fallback: Destination? = nil,
-                browserOrder: [String] = [], destinationOrder: [String: [String]] = [:]) {
+                browserOrder: [String] = [], destinationOrder: [String: [String]] = [:], showInMenuBar: Bool = true) {
         self.version = version
         self.rules = rules
         self.hiddenDestinationIDs = hiddenDestinationIDs
         self.fallback = fallback
         self.browserOrder = browserOrder
         self.destinationOrder = destinationOrder
+        self.showInMenuBar = showInMenuBar
     }
 
     private enum CodingKeys: String, CodingKey {
-        case version, rules, hiddenDestinationIDs, fallback, browserOrder, destinationOrder
+        case version, rules, hiddenDestinationIDs, fallback, browserOrder, destinationOrder, showInMenuBar
     }
 
     public init(from decoder: Decoder) throws {
@@ -86,6 +88,7 @@ public struct Configuration: Codable, Sendable {
         fallback = try values.decodeIfPresent(Destination.self, forKey: .fallback)
         browserOrder = try values.decodeIfPresent([String].self, forKey: .browserOrder) ?? []
         destinationOrder = try values.decodeIfPresent([String: [String]].self, forKey: .destinationOrder) ?? [:]
+        showInMenuBar = try values.decodeIfPresent(Bool.self, forKey: .showInMenuBar) ?? true
     }
 }
 
