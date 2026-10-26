@@ -66,8 +66,10 @@ final class RoutingTests: XCTestCase {
         var configuration = try JSONDecoder().decode(Configuration.self, from: old)
         XCTAssertTrue(configuration.browserOrder.isEmpty)
         XCTAssertTrue(configuration.destinationOrder.isEmpty)
+        XCTAssertTrue(configuration.showInMenuBar)
         configuration.browserOrder = ["browser.b", "browser.a"]
         configuration.destinationOrder = ["browser.b": ["browser.b|Profile 1", "browser.b|Default"]]
+        configuration.showInMenuBar = false
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = ConfigurationStore(fileURL: directory.appendingPathComponent("config.json"))
@@ -75,6 +77,7 @@ final class RoutingTests: XCTestCase {
         let reloaded = try store.load()
         XCTAssertEqual(reloaded.browserOrder, configuration.browserOrder)
         XCTAssertEqual(reloaded.destinationOrder, configuration.destinationOrder)
+        XCTAssertFalse(reloaded.showInMenuBar)
         XCTAssertThrowsError(try JSONDecoder().decode(Configuration.self, from: Data(#"{"version":1,"hiddenDestinationIDs":[]}"#.utf8)))
     }
 }

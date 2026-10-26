@@ -351,6 +351,21 @@ struct SettingsView: View {
                             .labelsHidden().toggleStyle(.switch).controlSize(.small)
                     }
                     Divider()
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Show Ouvre in the menu bar").font(.system(size: 13, weight: .medium))
+                            Text("If hidden, reopen Ouvre from Applications or Spotlight to change this setting.")
+                                .font(.system(size: 11)).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Toggle("Show Ouvre in the menu bar", isOn: Binding(
+                            get: { model.configuration.showInMenuBar },
+                            set: { model.setShowInMenuBar($0) }
+                        ))
+                        .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                        .disabled(model.configurationReadOnly)
+                    }
+                    Divider()
                     VStack(alignment: .leading, spacing: 9) {
                         Text("When no rule matches").font(.system(size: 13, weight: .medium))
                         Picker("When no rule matches", selection: Binding(get: { model.configuration.fallback?.id ?? "" }, set: { id in

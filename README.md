@@ -11,7 +11,7 @@ Requires macOS 14 or later and Xcode. Open `Ouvre.xcodeproj` and run the shared 
 open dist/Ouvre.app
 ```
 
-The script produces an ad hoc signed `dist/Ouvre.app`. The app lives in the menu bar. Open **Settings…** to inspect browsers, show or hide picker destinations, add rules, and test a URL. Choose **Make default** in General only when you want macOS to send web links to Ouvre. Merely building or launching the app does not change the default browser.
+The script produces an ad hoc signed `dist/Ouvre.app`. By default, the app lives in the menu bar. Open **Settings…** to inspect browsers, show or hide picker destinations, add rules, and test a URL. In **Settings → General**, turn off **Show Ouvre in the menu bar** if you prefer to keep it hidden. Reopen Ouvre from Applications or Spotlight to reach Settings and turn it back on; link handling continues while the item is hidden. Choose **Make default** in General only when you want macOS to send web links to Ouvre. Merely building or launching the app does not change the default browser.
 
 In **Settings → Browsers**, use the arrows on browser cards to set browser order and the arrows beside profiles to set their order within a browser. The picker and its numbered shortcuts follow this saved order. New browsers and profiles appear after saved entries; temporarily missing ones return to their saved positions. Visibility switches do not change the order.
 

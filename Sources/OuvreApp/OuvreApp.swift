@@ -12,6 +12,7 @@ import SwiftUI
     private var statusItem: NSStatusItem?
     private var verificationTimer: Timer?
     private var pauseObservation: AnyCancellable?
+    private var menuBarObservation: AnyCancellable?
     private let menuHeader = StatusMenuHeader()
 
     override init() {
@@ -42,6 +43,10 @@ import SwiftUI
         item.menu = menu
         pauseObservation = model.$isPaused.sink { [weak self] paused in
             self?.updateStatusButton(paused: paused)
+        }
+        menuBarObservation = model.$configuration.map(\.showInMenuBar).removeDuplicates().sink { [weak self] visible in
+            self?.statusItem?.isVisible = visible
+            VerificationHooks.record("menu-bar visible=\(visible)")
         }
         updateMenu(menu)
         if VerificationHooks.isEnabled {
@@ -127,6 +132,8 @@ import SwiftUI
         menuWillOpen(menu)
         let action: Selector?
         switch command {
+        case "menu-hide": model.setShowInMenuBar(false); action = nil
+        case "menu-show": model.setShowInMenuBar(true); action = nil
         case "menu-toggle-pause": action = #selector(togglePaused(_:))
         case "menu-picker": action = #selector(testPicker)
         case "menu-settings": action = #selector(openSettings)
@@ -140,7 +147,7 @@ import SwiftUI
         menuWillOpen(menu)
         let pauseTitle = menu.items.first(where: { $0.action == #selector(togglePaused(_:)) })?.title ?? "missing"
         let pickerTitle = menu.items.first(where: { $0.action == #selector(testPicker) })?.title ?? "missing"
-        VerificationHooks.record("menu paused=\(model.isPaused) pause-title=\(pauseTitle) picker-title=\(pickerTitle) header=\(menuHeader.accessibilityLabel() ?? "") tooltip=\(statusItem?.button?.toolTip ?? "") settings-visible=\(model.settingsWindow?.isVisible == true) current-url=\(model.currentURL?.absoluteString ?? "none")")
+        VerificationHooks.record("menu visible=\(statusItem?.isVisible == true) paused=\(model.isPaused) pause-title=\(pauseTitle) picker-title=\(pickerTitle) header=\(menuHeader.accessibilityLabel() ?? "") tooltip=\(statusItem?.button?.toolTip ?? "") settings-visible=\(model.settingsWindow?.isVisible == true) current-url=\(model.currentURL?.absoluteString ?? "none")")
         #endif
     }
 }
