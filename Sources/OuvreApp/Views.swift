@@ -222,9 +222,9 @@ enum SettingsPage: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self { case .general: "slider.horizontal.3"; case .browsers: "globe"; case .rules: "arrow.triangle.branch" }
     }
-    var subtitle: String {
+    var subtitle: String? {
         switch self {
-        case .general: "A home for every link."
+        case .general: nil
         case .browsers: "Choose what appears in your picker."
         case .rules: "Send familiar links straight to the right place."
         }
@@ -246,7 +246,9 @@ struct SettingsView: View {
                 HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 5) {
                         Text(page.rawValue).font(.system(size: 24, weight: .semibold))
-                        Text(page.subtitle).font(.system(size: 12)).foregroundStyle(.secondary)
+                        if let subtitle = page.subtitle {
+                            Text(subtitle).font(.system(size: 12)).foregroundStyle(.secondary)
+                        }
                     }
                     Spacer()
                     if page == .browsers {
@@ -328,13 +330,15 @@ struct SettingsView: View {
                         .font(.system(size: 27, weight: .light)).foregroundStyle(model.isDefaultBrowser ? Color.green : Color.accentColor)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(model.isDefaultBrowser ? "Ready for your links" : "Make Ouvre your link handler").font(.system(size: 13, weight: .semibold))
+                        Text(model.isDefaultBrowser ? "Ready for your links" : "Make Ouvre your default browser").font(.system(size: 13, weight: .semibold))
                         Text(model.isDefaultBrowser ? "Links from other apps come here first." : "Choose a browser or profile when you open a link.")
                             .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 8)
                     if !model.isDefaultBrowser {
-                        Button("Set up…") { model.makeDefaultBrowser() }.controlSize(.regular)
+                        Button("Make default") { model.makeDefaultBrowser() }
+                            .controlSize(.regular)
+                            .accessibilityLabel("Make Ouvre the default browser")
                     }
                 }
             }
