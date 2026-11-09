@@ -231,6 +231,7 @@ import SwiftUI
     }
 
     func showSettings() {
+        refreshDefaultBrowserStatus()
         if settingsWindow == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 620),
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
@@ -276,7 +277,7 @@ import SwiftUI
                 self.refreshDefaultBrowserStatus()
                 // Launch Services may report an error even after the association changed.
                 if let error, !self.isCurrentDefault(for: "http") {
-                    self.defaultBrowserMessage = "macOS could not make Ouvre the handler for HTTP links. \(Self.errorDetails(error)) Try Set up again, or choose Ouvre in System Settings → Desktop & Dock → Default web browser."
+                    self.defaultBrowserMessage = "macOS could not make Ouvre the handler for HTTP links. \(Self.errorDetails(error)) Try again, or choose Ouvre in System Settings → Desktop & Dock → Default web browser."
                     return
                 }
                 NSWorkspace.shared.setDefaultApplication(at: Bundle.main.bundleURL, toOpenURLsWithScheme: "https") { [weak self] error in
@@ -285,7 +286,7 @@ import SwiftUI
                         self.refreshDefaultBrowserStatus()
                         if !self.isDefaultBrowser {
                             let detail = error.map(Self.errorDetails) ?? "The default browser association has not changed."
-                            self.defaultBrowserMessage = "Ouvre is not yet the handler for both HTTP and HTTPS links. \(detail) Try Set up again, or choose Ouvre in System Settings → Desktop & Dock → Default web browser."
+                            self.defaultBrowserMessage = "Ouvre is not yet the handler for both HTTP and HTTPS links. \(detail) Try again, or choose Ouvre in System Settings → Desktop & Dock → Default web browser."
                         }
                     }
                 }
